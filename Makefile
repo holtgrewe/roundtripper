@@ -10,6 +10,7 @@ help:
 	@echo "  check      	Check the project"
 	@echo "  fix        	Fix the project"
 	@echo "  test       	Run the tests"
+	@echo "  build      	Build distribution packages"
 	@echo "  lock       	Upgrade the lock file"
 
 .PHONY: check
@@ -24,6 +25,10 @@ fix:
 .PHONY: test
 test:
 	uv run hatch run tests:run
+
+.PHONY: build
+build:
+	uv run hatch build
 
 .PHONY: lock
 lock:
