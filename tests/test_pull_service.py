@@ -60,7 +60,7 @@ class TestPullPage:
         assert result.pages_downloaded == 1
         assert result.attachments_downloaded == 0
         # Note: spaces preserved in directory names
-        assert (tmp_path / "SPACE" / "Test Page" / "page.confluence").exists()
+        assert (tmp_path / "SPACE" / "Test Page" / "page.xml").exists()
         assert (tmp_path / "SPACE" / "Test Page" / "page.json").exists()
 
     def test_pull_page_with_ancestors(
@@ -97,7 +97,7 @@ class TestPullPage:
 
         assert result.pages_downloaded == 1
         expected_path = tmp_path / "SPACE" / "Root" / "Parent" / "Child Page"
-        assert (expected_path / "page.confluence").exists()
+        assert (expected_path / "page.xml").exists()
 
     def test_pull_page_dry_run(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run doesn't write files."""

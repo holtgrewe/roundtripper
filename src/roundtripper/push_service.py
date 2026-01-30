@@ -49,7 +49,7 @@ class PushService:
         Parameters
         ----------
         page_path
-            Path to the page directory containing page.confluence and page.json.
+            Path to the page directory containing page.xml and page.json.
         recursive
             If True, also push all child pages in subdirectories.
 
@@ -100,17 +100,17 @@ class PushService:
         page_path
             Path to the page directory.
         """
-        confluence_file = page_path / "page.confluence"
+        xml_file = page_path / "page.xml"
         json_file = page_path / "page.json"
 
-        if not confluence_file.exists() or not json_file.exists():
-            LOGGER.warning("Skipping %s: missing page.confluence or page.json", page_path)
+        if not xml_file.exists() or not json_file.exists():
+            LOGGER.warning("Skipping %s: missing page.xml or page.json", page_path)
             return
 
         try:
             # Load local content and metadata
             LOGGER.debug("Loading page files from %s", page_path)
-            local_content = confluence_file.read_text(encoding="utf-8")
+            local_content = xml_file.read_text(encoding="utf-8")
             with json_file.open(encoding="utf-8") as f:
                 local_metadata = json.load(f)
 
@@ -183,7 +183,7 @@ class PushService:
         page_info
             Page metadata from stored JSON.
         local_content
-            Current content from page.confluence file.
+            Current content from page.xml file.
 
         Returns
         -------
@@ -260,13 +260,10 @@ class PushService:
             LOGGER.debug("No attachments directory at %s", attachments_dir)
             return
 
-        attachment_files = [
-            f for f in attachments_dir.iterdir() if f.suffix != ".json"
-        ]
+        attachment_files = [f for f in attachments_dir.iterdir() if f.suffix != ".json"]
         LOGGER.debug("Found %d attachment files in %s", len(attachment_files), attachments_dir)
 
         for attachment_file in attachment_files:
-
             metadata_file = attachment_file.with_suffix(attachment_file.suffix + ".json")
 
             if self._should_push_attachment(attachment_file, metadata_file):
@@ -344,8 +341,8 @@ class PushService:
 
         for item in page_path.iterdir():
             if item.is_dir() and item.name != "attachments":
-                confluence_file = item / "page.confluence"
-                if confluence_file.exists():
+                xml_file = item / "page.xml"
+                if xml_file.exists():
                     child_pages.append(item)
                     # Recursively find grandchildren
                     child_pages.extend(self._find_child_pages(item))
@@ -370,8 +367,8 @@ class PushService:
         def find_pages_recursive(directory: Path) -> None:
             for item in directory.iterdir():
                 if item.is_dir():
-                    confluence_file = item / "page.confluence"
-                    if confluence_file.exists():
+                    xml_file = item / "page.xml"
+                    if xml_file.exists():
                         all_pages.append(item)
                     # Always search subdirectories (except attachments)
                     if item.name != "attachments":

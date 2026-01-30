@@ -42,7 +42,7 @@ def create_page_directory(
     title
         Page title (used as directory name).
     content
-        Page content for page.confluence.
+        Page content for page.xml.
     page_id
         Confluence page ID.
     version
@@ -60,9 +60,9 @@ def create_page_directory(
     page_dir = base_path / title
     page_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create page.confluence
-    confluence_file = page_dir / "page.confluence"
-    confluence_file.write_text(content, encoding="utf-8")
+    # Create page.xml
+    xml_file = page_dir / "page.xml"
+    xml_file.write_text(content, encoding="utf-8")
 
     # Create page.json with metadata
     metadata: dict[str, Any] = {
@@ -122,8 +122,8 @@ class TestPushPage:
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify the local content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified content</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
         # Mock version check
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
@@ -140,8 +140,8 @@ class TestPushPage:
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify the local content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified content</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
         # Mock version check
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
@@ -162,8 +162,8 @@ class TestPushPage:
         )
 
         # Modify the local content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified content</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
         # Server has newer version
         mock_client.get_page_by_id.return_value = {"version": {"number": 3}}
@@ -183,8 +183,8 @@ class TestPushPage:
         )
 
         # Modify the local content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified content</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
         # Server has newer version
         mock_client.get_page_by_id.return_value = {"version": {"number": 3}}
@@ -214,8 +214,8 @@ class TestPushPage:
         )
 
         # Modify the local content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified content</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
         # Version check fails with exception (get_page_by_id is used for version check)
         # but update_page succeeds
@@ -244,7 +244,7 @@ class TestPushPage:
         )
 
         # Modify the child content
-        child_confluence = child_dir / "page.confluence"
+        child_confluence = child_dir / "page.xml"
         child_confluence.write_text("<p>Child Modified</p>", encoding="utf-8")
 
         # Mock version checks
@@ -274,7 +274,7 @@ class TestPushSpace:
         )
 
         # Modify page 2
-        page2_confluence = page2_dir / "page.confluence"
+        page2_confluence = page2_dir / "page.xml"
         page2_confluence.write_text("<p>Page 2 Modified</p>", encoding="utf-8")
 
         # Mock version checks
@@ -303,8 +303,8 @@ class TestPushAttachments:
         attachment_file.write_bytes(b"PDF content")
 
         # Modify page to trigger push
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
 
@@ -333,8 +333,8 @@ class TestPushAttachments:
         metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
 
         # Modify page to trigger push
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
 
@@ -363,8 +363,8 @@ class TestPushAttachments:
         metadata_file.write_text(json.dumps(metadata), encoding="utf-8")
 
         # Modify page to trigger push
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
 
@@ -384,8 +384,8 @@ class TestErrorHandling:
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         # Mock version check success but update failure
         mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
@@ -455,8 +455,8 @@ class TestDryRunBehavior:
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         # Add new attachment
         attachments_dir = page_dir / "attachments"
@@ -479,8 +479,8 @@ class TestDryRunBehavior:
         )
 
         # Modify content
-        confluence_file = page_dir / "page.confluence"
-        confluence_file.write_text("<p>Modified</p>", encoding="utf-8")
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
         # Server has newer version
         mock_client.get_page_by_id.return_value = {"version": {"number": 5}}

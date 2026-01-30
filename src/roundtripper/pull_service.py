@@ -10,7 +10,7 @@ from typing import Any
 from atlassian import Confluence
 from tqdm import tqdm
 
-from roundtripper.file_utils import build_page_path, save_file, save_json
+from roundtripper.file_utils import build_page_path, format_xml, save_file, save_json
 from roundtripper.models import AttachmentInfo, PageInfo, PullResult, SpaceInfo
 
 #: Logger instance.
@@ -263,9 +263,10 @@ class PullService:
         page
             Page information to save.
         """
-        # Save Confluence storage format
-        confluence_path = page_dir / "page.confluence"
-        save_file(confluence_path, page.body_storage)
+        # Save Confluence storage format as formatted XML
+        xml_path = page_dir / "page.xml"
+        formatted_xml = format_xml(page.body_storage)
+        save_file(xml_path, formatted_xml)
 
         # Save raw API response
         json_path = page_dir / "page.json"
