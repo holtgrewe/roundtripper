@@ -5,6 +5,7 @@ from roundtripper.models import (
     Label,
     PageInfo,
     PullResult,
+    PushResult,
     SpaceInfo,
     User,
     Version,
@@ -199,3 +200,31 @@ class TestPullResult:
         result.errors.append("Error 1")
         result.errors.append("Error 2")
         assert len(result.errors) == 2
+
+
+class TestPushResult:
+    """Tests for PushResult model."""
+
+    def test_default_values(self) -> None:
+        """Test that default values are set."""
+        result = PushResult()
+        assert result.pages_updated == 0
+        assert result.pages_created == 0
+        assert result.pages_skipped == 0
+        assert result.attachments_uploaded == 0
+        assert result.attachments_skipped == 0
+        assert result.conflicts == []
+        assert result.errors == []
+
+    def test_can_add_conflicts(self) -> None:
+        """Test adding conflicts to result."""
+        result = PushResult()
+        result.conflicts.append("Conflict 1")
+        result.conflicts.append("Conflict 2")
+        assert len(result.conflicts) == 2
+
+    def test_can_add_errors(self) -> None:
+        """Test adding errors to result."""
+        result = PushResult()
+        result.errors.append("Error 1")
+        assert len(result.errors) == 1

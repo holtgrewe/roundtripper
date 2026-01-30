@@ -526,3 +526,383 @@ class TestConfluencePullCommand:
 
         # Verify dry_run output is shown in logs
         assert "DRY RUN" in caplog.text
+
+    def test_pull_verbose_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test pull command with --verbose flag enables debug logging."""
+        import logging
+
+        from roundtripper.models import PullResult
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_space.return_value = PullResult(
+            pages_downloaded=1, attachments_downloaded=0
+        )
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "pull", "--space", "SPACE", "--output", str(tmp_path), "--verbose"],
+            result_action="return_value",
+        )
+
+        # Verify debug logging is enabled for roundtripper logger
+        assert logging.getLogger("roundtripper").level == logging.DEBUG
+
+
+class TestConfluencePushCommand:
+    """Tests for the confluence push command."""
+
+    def test_push_help(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test push command help shows required options."""
+        app(["confluence", "push", "--help"], result_action="return_value")
+
+        captured = capsys.readouterr()
+        assert "--page-path" in captured.out
+        assert "--space-path" in captured.out
+        assert "--recursive" in captured.out
+        assert "--dry-run" in captured.out
+        assert "--force" in captured.out
+
+    def test_push_no_path_specified(self, mocker: MockerFixture) -> None:
+        """Test push command fails without --page-path or --space-path."""
+        with pytest.raises(SystemExit) as exc_info:
+            app(["confluence", "push"], result_action="return_value")
+
+        assert exc_info.value.code == 1
+
+    def test_push_both_paths_specified(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test push command fails with both --page-path and --space-path."""
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+        space_path = tmp_path / "space"
+        space_path.mkdir()
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                [
+                    "confluence",
+                    "push",
+                    "--page-path",
+                    str(page_path),
+                    "--space-path",
+                    str(space_path),
+                ],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_push_nonexistent_path(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        """Test push command fails with nonexistent path."""
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                [
+                    "confluence",
+                    "push",
+                    "--page-path",
+                    str(tmp_path / "nonexistent"),
+                ],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_push_connection_error(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command handles connection error."""
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mocker.patch(
+            "roundtripper.confluence.get_confluence_client",
+            side_effect=ConnectionError("Failed to connect"),
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "push", "--page-path", str(page_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_push_page_success(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command succeeds with --page-path."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=1, pages_skipped=0)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path)],
+            result_action="return_value",
+        )
+
+        mock_service_instance.push_page.assert_called_once_with(page_path, recursive=False)
+
+    def test_push_page_recursive(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command with --recursive flag."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=3, pages_skipped=1)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path), "--recursive"],
+            result_action="return_value",
+        )
+
+        mock_service_instance.push_page.assert_called_once_with(page_path, recursive=True)
+
+    def test_push_space_success(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command succeeds with --space-path."""
+        from roundtripper.models import PushResult
+
+        space_path = tmp_path / "SPACE"
+        space_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_space.return_value = PushResult(pages_updated=5, pages_skipped=2)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--space-path", str(space_path)],
+            result_action="return_value",
+        )
+
+        mock_service_instance.push_space.assert_called_once_with(space_path)
+
+    def test_push_with_conflicts(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command exits with error when conflicts exist."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(
+            pages_updated=0,
+            conflicts=["Conflict: Page 1 - local version 1, server version 3"],
+        )
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "push", "--page-path", str(page_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_push_with_more_than_five_conflicts(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test push command truncates conflict output when more than 5 conflicts."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        # Create 7 conflicts to trigger the truncation message
+        mock_service_instance.push_page.return_value = PushResult(
+            pages_updated=0,
+            conflicts=[f"Conflict {i}" for i in range(7)],
+        )
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "push", "--page-path", str(page_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+        # Check log messages - should show first 5 conflicts and a "more conflicts" message
+        assert "Conflict 0" in caplog.text
+        assert "2 more conflicts" in caplog.text
+
+    def test_push_with_more_than_five_errors(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test push command truncates error output when more than 5 errors."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        # Create 7 errors to trigger the truncation message
+        mock_service_instance.push_page.return_value = PushResult(
+            pages_updated=0,
+            errors=[f"Error {i}" for i in range(7)],
+        )
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "push", "--page-path", str(page_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+        # Check log messages - should show first 5 errors and a "more errors" message
+        assert "Error 0" in caplog.text
+        assert "2 more errors" in caplog.text
+
+    def test_push_with_errors(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command exits with error when errors occur."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(
+            pages_updated=1,
+            errors=["API Error: Permission denied"],
+        )
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "push", "--page-path", str(page_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_push_dry_run(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test push command with --dry-run flag."""
+        import logging
+
+        from roundtripper.models import PushResult
+
+        caplog.set_level(logging.INFO)
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=0, pages_skipped=1)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path), "--dry-run"],
+            result_action="return_value",
+        )
+
+        # Verify dry_run output is shown in logs
+        assert "DRY RUN" in caplog.text
+
+    def test_push_force_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command passes --force flag to service."""
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_class = mocker.patch("roundtripper.confluence.PushService")
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=1)
+        mock_service_class.return_value = mock_service_instance
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path), "--force"],
+            result_action="return_value",
+        )
+
+        # Verify PushService was instantiated with force=True
+        mock_service_class.assert_called_once_with(mock_client, dry_run=False, force=True)
+
+    def test_push_verbose_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command with --verbose flag enables debug logging."""
+        import logging
+
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=1)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path), "--verbose"],
+            result_action="return_value",
+        )
+
+        # Verify debug logging is enabled for roundtripper logger
+        assert logging.getLogger("roundtripper").level == logging.DEBUG

@@ -240,3 +240,15 @@ class PullResult(BaseModel):
     pages_skipped: int = 0
     attachments_skipped: int = 0
     errors: list[str] = Field(default_factory=list)
+
+
+class PushResult(BaseModel):
+    """Result of a push operation."""
+
+    pages_updated: int = 0
+    pages_created: int = 0
+    pages_skipped: int = 0
+    attachments_uploaded: int = 0
+    attachments_skipped: int = 0
+    conflicts: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
