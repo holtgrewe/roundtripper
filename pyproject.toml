@@ -125,13 +125,6 @@ group = "dev"
 run = "pytest --capture=no -vv --cov=roundtripper --cov-report=term-missing tests/ --durations 5 -s {args:tests}"
 run-no-cov = "pytest -vv tests/ --durations 5 -s {args:tests}"
 
-[tool.hatch.envs.build]
-installer = "uv"
-group = "dev"
-
-[tool.hatch.envs.build.scripts]
-run = "hatch build"
-
 [tool.hatch.build]
 include = [
     "src/roundtripper/**/*.py",
