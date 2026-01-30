@@ -68,7 +68,7 @@ app.command(app_confluence)
 
 def cli() -> None:
     """CLI entry point for the roundtripper command."""
-    app.meta()
+    app([])
 
 
 if __name__ == "__main__":
