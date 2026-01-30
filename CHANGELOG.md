@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/holtgrewe/roundtripper/compare/roundtripper-v0.1.0...roundtripper-v0.2.0) (2026-01-30)
+
+
+### Features
+
+* write out formatted .xml files ([#13](https://github.com/holtgrewe/roundtripper/issues/13)) ([#14](https://github.com/holtgrewe/roundtripper/issues/14)) ([13a01e7](https://github.com/holtgrewe/roundtripper/commit/13a01e7a3864f47a8c7d803bd86081df3e570150))
+
 ## 0.1.0 (2026-01-30)
 
 
