@@ -56,3 +56,29 @@ make lock
 ```bash
 roundtripper --help
 ```
+
+### Configure Confluence
+
+Configure your Confluence credentials and connection settings:
+
+```bash
+roundtripper confluence config
+```
+
+This will open an interactive configuration menu. Configuration is stored in `~/.config/roundtripper/config.json` following the XDG Base Directory specification.
+
+To view your current configuration:
+
+```bash
+roundtripper confluence config --show
+```
+
+To jump directly to a specific configuration section:
+
+```bash
+roundtripper confluence config --jump-to auth.confluence
+```
+
+## Acknowledgments
+
+This project includes code adapted from [confluence-markdown-exporter](https://github.com/Spenhouet/confluence-markdown-exporter) by Sebastian Penhouet.
