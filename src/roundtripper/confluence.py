@@ -9,6 +9,7 @@ from roundtripper.api_client import get_confluence_client
 from roundtripper.config_interactive import main_config_menu_loop
 from roundtripper.config_store import get_settings
 from roundtripper.pull_service import PullService
+from roundtripper.push_service import PushService
 
 #: Logger instance.
 LOGGER = logging.getLogger(__name__)
@@ -187,3 +188,108 @@ def pull(
     LOGGER.info("")
     LOGGER.info("✓ Pull completed successfully!")
     LOGGER.info("Output directory: %s", output.absolute())
+
+
+@app.command
+def push(
+    *,
+    page_path: Path | None = None,
+    space_path: Path | None = None,
+    recursive: bool = False,
+    dry_run: bool = False,
+    force: bool = False,
+) -> None:
+    """Push local content back to Confluence.
+
+    Uploads modified pages and attachments to Confluence, detecting changes
+    and handling version conflicts.
+
+    Parameters
+    ----------
+    page_path
+        Path to a page directory to push (contains page.confluence and page.json).
+    space_path
+        Path to a space directory to push all pages.
+    recursive
+        When pushing a specific page, also push all descendant pages.
+    dry_run
+        Show what would be pushed without actually pushing.
+    force
+        Push even if there are version conflicts (overwrites server content).
+    """
+    if not page_path and not space_path:
+        LOGGER.error("Either --page-path or --space-path must be specified")
+        raise SystemExit(1)
+
+    if page_path and space_path:
+        LOGGER.error("Cannot specify both --page-path and --space-path")
+        raise SystemExit(1)
+
+    # Validate paths exist
+    target_path = page_path or space_path
+    assert target_path is not None  # for type checker
+    if not target_path.exists():
+        LOGGER.error("Path does not exist: %s", target_path)
+        raise SystemExit(1)
+
+    # Get Confluence client
+    try:
+        client = get_confluence_client()
+    except ConnectionError as e:
+        LOGGER.error("Failed to connect to Confluence: %s", e)
+        LOGGER.info("Run 'roundtripper confluence ping' to test your connection")
+        raise SystemExit(1) from e
+
+    # Create push service
+    service = PushService(client, dry_run=dry_run, force=force)
+
+    if dry_run:
+        LOGGER.info("[DRY RUN] Analyzing changes...")
+        LOGGER.info("")
+
+    # Perform push
+    if page_path:
+        LOGGER.info("Pushing page: %s (recursive=%s)", page_path, recursive)
+        result = service.push_page(page_path, recursive=recursive)
+    else:
+        assert space_path is not None  # for type checker
+        LOGGER.info("Pushing space: %s", space_path)
+        result = service.push_space(space_path)
+
+    # Summary
+    LOGGER.info("")
+    LOGGER.info("=" * 70)
+    LOGGER.info("Push Summary")
+    LOGGER.info("=" * 70)
+    LOGGER.info("Pages updated: %d", result.pages_updated)
+    LOGGER.info("Pages created: %d", result.pages_created)
+    LOGGER.info("Pages skipped (unchanged): %d", result.pages_skipped)
+    LOGGER.info("Attachments uploaded: %d", result.attachments_uploaded)
+    LOGGER.info("Attachments skipped: %d", result.attachments_skipped)
+
+    if result.conflicts:
+        LOGGER.warning("")
+        LOGGER.warning("Conflicts detected: %d", len(result.conflicts))
+        for conflict in result.conflicts[:5]:
+            LOGGER.warning("  ⚠ %s", conflict)
+        if len(result.conflicts) > 5:
+            LOGGER.warning("  ... and %d more conflicts", len(result.conflicts) - 5)
+        LOGGER.info("")
+        LOGGER.info("Use --force to overwrite server content, or pull latest changes first.")
+
+    if result.errors:
+        LOGGER.warning("")
+        LOGGER.warning("Errors encountered: %d", len(result.errors))
+        for error in result.errors[:5]:
+            LOGGER.warning("  - %s", error)
+        if len(result.errors) > 5:
+            LOGGER.warning("  ... and %d more errors", len(result.errors) - 5)
+
+    if result.conflicts or result.errors:
+        raise SystemExit(1)
+
+    LOGGER.info("")
+    if dry_run:
+        LOGGER.info("Run without --dry-run to apply changes.")
+    else:
+        LOGGER.info("✓ Push completed successfully!")
