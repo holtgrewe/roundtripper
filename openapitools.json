@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/OpenAPITools/openapi-generator/master/modules/openapi-generator-cli/src/main/resources/org/openapitools/codegen/config-schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.10.0"
+  }
+}

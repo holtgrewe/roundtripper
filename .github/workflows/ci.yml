@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run ruff
+        run: |
+          uv sync --group dev
+          uv run hatch run quality:check
+
+      - name: Run pyright
+        run: |
+          uv sync --group dev
+          uv run hatch run quality:typecheck
+
+  Test:
+    runs-on: ubuntu-latest
+    needs:
+      - Lint
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run tests
+        run: |
+          uv sync --group dev
+          uv run hatch run tests:run
+
+      - name: Run CLI --help
+        run: |
+          uv pip install -e .
+          uv sync --group dev
+          uv run --frozen --no-group=dev roundtripper --help
