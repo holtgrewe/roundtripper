@@ -116,6 +116,7 @@ def pull(
     output: Path = Path("./confluence-export"),
     recursive: bool = True,
     dry_run: bool = False,
+    verbose: bool = False,
 ) -> None:
     """Pull Confluence content to local storage.
 
@@ -134,7 +135,12 @@ def pull(
         When pulling a specific page, also pull all descendants.
     dry_run
         Show what would be downloaded without actually downloading.
+    verbose
+        Enable debug logging.
     """
+    if verbose:
+        logging.getLogger("roundtripper").setLevel(logging.DEBUG)
+
     if not space and not page_id:
         LOGGER.error("Either --space or --page-id must be specified")
         raise SystemExit(1)
@@ -198,6 +204,7 @@ def push(
     recursive: bool = False,
     dry_run: bool = False,
     force: bool = False,
+    verbose: bool = False,
 ) -> None:
     """Push local content back to Confluence.
 
@@ -216,7 +223,12 @@ def push(
         Show what would be pushed without actually pushing.
     force
         Push even if there are version conflicts (overwrites server content).
+    verbose
+        Enable debug logging.
     """
+    if verbose:
+        logging.getLogger("roundtripper").setLevel(logging.DEBUG)
+
     if not page_path and not space_path:
         LOGGER.error("Either --page-path or --space-path must be specified")
         raise SystemExit(1)

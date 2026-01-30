@@ -527,6 +527,31 @@ class TestConfluencePullCommand:
         # Verify dry_run output is shown in logs
         assert "DRY RUN" in caplog.text
 
+    def test_pull_verbose_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test pull command with --verbose flag enables debug logging."""
+        import logging
+
+        from roundtripper.models import PullResult
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_space.return_value = PullResult(
+            pages_downloaded=1, attachments_downloaded=0
+        )
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "pull", "--space", "SPACE", "--output", str(tmp_path), "--verbose"],
+            result_action="return_value",
+        )
+
+        # Verify debug logging is enabled for roundtripper logger
+        assert logging.getLogger("roundtripper").level == logging.DEBUG
+
 
 class TestConfluencePushCommand:
     """Tests for the confluence push command."""
@@ -855,3 +880,29 @@ class TestConfluencePushCommand:
 
         # Verify PushService was instantiated with force=True
         mock_service_class.assert_called_once_with(mock_client, dry_run=False, force=True)
+
+    def test_push_verbose_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test push command with --verbose flag enables debug logging."""
+        import logging
+
+        from roundtripper.models import PushResult
+
+        page_path = tmp_path / "page"
+        page_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.push_page.return_value = PushResult(pages_updated=1)
+        mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "push", "--page-path", str(page_path), "--verbose"],
+            result_action="return_value",
+        )
+
+        # Verify debug logging is enabled for roundtripper logger
+        assert logging.getLogger("roundtripper").level == logging.DEBUG

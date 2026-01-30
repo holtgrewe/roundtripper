@@ -58,10 +58,12 @@ class PushService:
         PushResult
             Summary of the push operation.
         """
+        LOGGER.debug("Starting push_page: path=%s, recursive=%s", page_path, recursive)
         self._push_page_at_path(page_path)
 
         if recursive:
             child_pages = self._find_child_pages(page_path)
+            LOGGER.debug("Found %d child pages to push", len(child_pages))
             for child_path in tqdm(child_pages, desc="Pushing child pages", disable=self.dry_run):
                 self._push_page_at_path(child_path)
 
@@ -80,8 +82,10 @@ class PushService:
         PushResult
             Summary of the push operation.
         """
+        LOGGER.debug("Starting push_space: path=%s", space_path)
         all_pages = self._find_all_pages(space_path)
         LOGGER.info("Found %d pages to analyze", len(all_pages))
+        LOGGER.debug("Page paths: %s", [str(p) for p in all_pages])
 
         for page_path in tqdm(all_pages, desc="Pushing pages", disable=self.dry_run):
             self._push_page_at_path(page_path)
@@ -105,11 +109,18 @@ class PushService:
 
         try:
             # Load local content and metadata
+            LOGGER.debug("Loading page files from %s", page_path)
             local_content = confluence_file.read_text(encoding="utf-8")
             with json_file.open(encoding="utf-8") as f:
                 local_metadata = json.load(f)
 
             page_info = PageInfo.from_api_response(local_metadata)
+            LOGGER.debug(
+                "Loaded page: id=%d, title=%s, version=%d",
+                page_info.id,
+                page_info.title,
+                page_info.version.number,
+            )
 
             # Check if content has changed
             if not self._has_content_changed(page_info, local_content):
@@ -118,8 +129,10 @@ class PushService:
                 return
 
             # Check for version conflicts
+            LOGGER.debug("Checking version conflict for page %d", page_info.id)
             conflict = self._check_version_conflict(page_info)
             if conflict and not self.force:
+                LOGGER.debug("Version conflict detected: %s", conflict)
                 self.result.conflicts.append(conflict)
                 return
 
@@ -140,6 +153,11 @@ class PushService:
                         page_info.version.number + 1,
                     )
             else:
+                LOGGER.debug(
+                    "Calling update_page: page_id=%d, title=%s",
+                    page_info.id,
+                    page_info.title,
+                )
                 self._update_page(page_info, local_content)
                 LOGGER.info(
                     "✓ Updated: %s (v%d → v%d)",
@@ -192,6 +210,12 @@ class PushService:
             server_response = self.client.get_page_by_id(page_info.id, expand="version")
             assert isinstance(server_response, dict)
             server_version = server_response.get("version", {}).get("number", 0)
+            LOGGER.debug(
+                "Version check: page_id=%d, local=%d, server=%d",
+                page_info.id,
+                page_info.version.number,
+                server_version,
+            )
 
             if server_version > page_info.version.number:
                 return (
@@ -233,11 +257,15 @@ class PushService:
         """
         attachments_dir = page_path / "attachments"
         if not attachments_dir.exists():
+            LOGGER.debug("No attachments directory at %s", attachments_dir)
             return
 
-        for attachment_file in attachments_dir.iterdir():
-            if attachment_file.suffix == ".json":
-                continue  # Skip metadata files
+        attachment_files = [
+            f for f in attachments_dir.iterdir() if f.suffix != ".json"
+        ]
+        LOGGER.debug("Found %d attachment files in %s", len(attachment_files), attachments_dir)
+
+        for attachment_file in attachment_files:
 
             metadata_file = attachment_file.with_suffix(attachment_file.suffix + ".json")
 
@@ -245,10 +273,14 @@ class PushService:
                 if self.dry_run:
                     LOGGER.info("📎 WOULD UPLOAD: %s", attachment_file.name)
                 else:
+                    LOGGER.debug(
+                        "Uploading attachment: %s to page %d", attachment_file.name, page_id
+                    )
                     self._upload_attachment(page_id, attachment_file)
                     LOGGER.info("✓ Uploaded: %s", attachment_file.name)
                     self.result.attachments_uploaded += 1
             else:
+                LOGGER.debug("Skipping unchanged attachment: %s", attachment_file.name)
                 self.result.attachments_skipped += 1
 
     def _should_push_attachment(self, attachment_file: Path, metadata_file: Path) -> bool:
