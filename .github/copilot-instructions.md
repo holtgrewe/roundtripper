@@ -71,7 +71,8 @@ def process_data(data: str) -> None:
 
 - **All code must pass `pyright` with strict settings**
 - Use proper type annotations for all functions
-- Avoid `Any` types unless absolutely necessary
+- **Never use `object` as a type annotation** - use `Any` from `typing` or a more specific type
+- Avoid `Any` types unless absolutely necessary - prefer specific types when possible
 - Minimize use of `# type: ignore` - use proper types from libraries instead
 - For pytest fixtures, import types like `MockerFixture` from `pytest_mock`
 
@@ -83,6 +84,12 @@ def process_data(data: str) -> None:
 - Use descriptive variable names
 - Add docstrings to all public functions using NumPy style
 
+### Docstring Guidelines
+
+- **Do NOT include type annotations in docstrings** - they are already in function signatures
+- Use NumPy-style docstrings without type information in parameter descriptions
+- Only describe what the parameter does, not its type
+
 Example:
 ```python
 def calculate_total(items: list[Item], tax_rate: float = 0.0) -> Decimal:
@@ -90,9 +97,9 @@ def calculate_total(items: list[Item], tax_rate: float = 0.0) -> Decimal:
 
     Parameters
     ----------
-    items : list[Item]
+    items
         List of items to calculate total for.
-    tax_rate : float, optional
+    tax_rate
         Tax rate as a decimal (e.g., 0.1 for 10%), by default 0.0
 
     Returns
