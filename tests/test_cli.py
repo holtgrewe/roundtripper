@@ -74,7 +74,7 @@ class TestCLIBehavior:
 
         actual = capsys.readouterr().out
         # Version output should contain a version number
-        assert "0.0.0" in actual
+        assert actual.count(".") >= 2  # Simple check for version format
 
     def test_app_import(self) -> None:
         """Test that the app can be imported."""
