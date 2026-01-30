@@ -28,7 +28,7 @@ jobs:
       - name: Build package
         if: ${{ steps.release.outputs.release_created }}
         run: |
-          uv run hatch run build:run
+          uv run hatch run build
 
       - name: Publish to PyPI
         if: ${{ steps.release.outputs.release_created }}
