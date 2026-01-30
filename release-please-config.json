@@ -1,0 +1,15 @@
+{
+  "release-type": "python",
+  "bump-minor-pre-major": false,
+  "bump-patch-for-minor-pre-major": false,
+  "draft": false,
+  "prerelease": false,
+  "packages": {
+    ".": {
+      "package-name": "roundtripper",
+      "release-type": "python",
+      "version-file": "src/roundtripper/__init__.py",
+      "component": ""
+    }
+  }
+}

@@ -72,9 +72,11 @@ def process_data(data: str) -> None:
 - **All code must pass `pyright` with strict settings**
 - Use proper type annotations for all functions
 - **Never use `object` as a type annotation** - use `Any` from `typing` or a more specific type
-- Avoid `Any` types unless absolutely necessary - prefer specific types when possible
+- **Prefer specific types over `Any`** - use actual types from libraries (e.g., `Confluence` from `atlassian`, not `Any`)
+- Exception: it is good to use `dict[str, Any]` for JSON-like data structures, in particular in tests
 - Minimize use of `# type: ignore` - use proper types from libraries instead
 - For pytest fixtures, import types like `MockerFixture` from `pytest_mock`
+- **Import types from source libraries** - e.g., `from atlassian import Confluence` for API clients
 
 ### Code Style
 
@@ -83,6 +85,7 @@ def process_data(data: str) -> None:
 - Follow PEP 8 naming conventions
 - Use descriptive variable names
 - Add docstrings to all public functions using NumPy style
+- **All imports must be at the top of the file** - no local imports inside functions except for circular dependency resolution
 
 ### Docstring Guidelines
 
@@ -136,8 +139,9 @@ def process_command(input_file: Path) -> None:
 
 - Use `app([], result_action="return_value")` to avoid `sys.exit()` in tests
 - Test business logic functions directly without cyclopts
-- Test CLI behavior separately using `capsys` for output verification
-- Use `pytest.raises(SystemExit)` for commands that exit
+- Test CLI behavior separately using `capsys` for output verification or `caplog` for logging
+- **Commands should raise `SystemExit(code)`** instead of calling `sys.exit(code)` - more testable
+- Use `pytest.raises(SystemExit)` to test exit behavior
 - Provide `console` fixture for consistent Rich output in tests
 
 ### CLI Entry Point
