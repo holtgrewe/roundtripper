@@ -214,7 +214,7 @@ def push(
     Parameters
     ----------
     page_path
-        Path to a page directory to push (contains page.confluence and page.json).
+        Path to a page directory to push (contains page.xml and page.json).
     space_path
         Path to a space directory to push all pages.
     recursive

@@ -86,9 +86,15 @@ class TestCLIBehavior:
         # Mock sys.argv to provide help arguments
         mocker.patch("sys.argv", ["roundtripper", "--help"])
 
-        # Call cli() which should call app.meta([]) and show help
-        with pytest.raises(SystemExit) as exc_info:
-            cli()
+        # Suppress the pytest warning since we're deliberately testing the CLI entry point
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, message=".*Cyclopts.*")
+
+            # Call cli() which should call app.meta([]) and show help
+            with pytest.raises(SystemExit) as exc_info:
+                cli()
 
         # Should exit with code 0 for help
         assert exc_info.value.code == 0

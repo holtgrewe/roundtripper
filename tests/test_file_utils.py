@@ -4,7 +4,73 @@ from pathlib import Path
 
 import pytest
 
-from roundtripper.file_utils import build_page_path, sanitize_filename, save_file, save_json
+from roundtripper.file_utils import (
+    build_page_path,
+    format_xml,
+    sanitize_filename,
+    save_file,
+    save_json,
+)
+
+
+class TestFormatXml:
+    """Tests for format_xml function."""
+
+    def test_format_simple_xml(self) -> None:
+        """Test formatting simple XML content."""
+        xml = "<root><child>value</child></root>"
+        formatted = format_xml(xml)
+
+        assert "<?xml" in formatted
+        assert "<root>" in formatted
+        assert "  <child>" in formatted
+        assert "value" in formatted
+
+    def test_format_xml_with_attributes(self) -> None:
+        """Test formatting XML with attributes."""
+        xml = '<root attr="value"><child>text</child></root>'
+        formatted = format_xml(xml)
+
+        assert "<?xml" in formatted
+        assert 'attr="value"' in formatted
+        assert "<child>" in formatted
+
+    def test_format_xml_removes_blank_lines(self) -> None:
+        """Test that extra blank lines are removed."""
+        xml = "<root><child>value</child></root>"
+        formatted = format_xml(xml)
+
+        # Should not have multiple consecutive blank lines
+        assert "\n\n\n" not in formatted
+
+    def test_format_xml_handles_invalid_xml(self) -> None:
+        """Test that invalid XML is handled gracefully."""
+        invalid_xml = "<root><unclosed>"
+        formatted = format_xml(invalid_xml)
+
+        # The function adds XML declaration before parsing, so invalid XML
+        # will have the declaration prepended before it fails parsing
+        assert "<?xml" in formatted or formatted == invalid_xml
+
+    def test_format_xml_preserves_content(self) -> None:
+        """Test that XML content is preserved."""
+        xml = "<ac:structured-macro><ac:parameter>Test</ac:parameter></ac:structured-macro>"
+        formatted = format_xml(xml)
+
+        assert "ac:structured-macro" in formatted
+        assert "ac:parameter" in formatted
+        assert "Test" in formatted
+
+    def test_format_xml_with_long_lines(self) -> None:
+        """Test that long lines are preserved."""
+        # Create XML with a very long line
+        long_attr = "a" * 150
+        xml = f'<root attr="{long_attr}"><child>value</child></root>'
+        formatted = format_xml(xml)
+
+        # Should still be properly formatted even if line is long
+        assert "<root" in formatted
+        assert "<child>" in formatted
 
 
 class TestSanitizeFilename:
