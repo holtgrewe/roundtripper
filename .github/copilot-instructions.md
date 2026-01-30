@@ -73,6 +73,7 @@ def process_data(data: str) -> None:
 - Use proper type annotations for all functions
 - **Never use `object` as a type annotation** - use `Any` from `typing` or a more specific type
 - Avoid `Any` types unless absolutely necessary - prefer specific types when possible
+- Exception: it is good to use `dict[str, Any]` for JSON-like data structures, in particular in tests
 - Minimize use of `# type: ignore` - use proper types from libraries instead
 - For pytest fixtures, import types like `MockerFixture` from `pytest_mock`
 

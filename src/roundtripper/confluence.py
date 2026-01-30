@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 import cyclopts
@@ -140,3 +141,89 @@ def ping() -> None:
     except Exception as e:
         LOGGER.error("✗ Unexpected error: %s", e)
         sys.exit(1)
+
+
+@app.command
+def pull(
+    *,
+    space: str | None = None,
+    page_id: int | None = None,
+    output: Path = Path("./confluence-export"),
+    recursive: bool = True,
+    dry_run: bool = False,
+) -> None:
+    """Pull Confluence content to local storage.
+
+    Downloads pages and attachments from Confluence, preserving the original
+    Confluence storage format and all API metadata.
+
+    Parameters
+    ----------
+    space
+        Space key to pull all pages from.
+    page_id
+        Specific page ID to pull.
+    output
+        Output directory for downloaded content.
+    recursive
+        When pulling a specific page, also pull all descendants.
+    dry_run
+        Show what would be downloaded without actually downloading.
+    """
+    if not space and not page_id:
+        LOGGER.error("Either --space or --page-id must be specified")
+        sys.exit(1)
+
+    if space and page_id:
+        LOGGER.error("Cannot specify both --space and --page-id")
+        sys.exit(1)
+
+    # Get Confluence client
+    from roundtripper.api_client import get_confluence_client
+    from roundtripper.pull_service import PullService
+
+    try:
+        client = get_confluence_client()
+    except ConnectionError as e:
+        LOGGER.error("Failed to connect to Confluence: %s", e)
+        LOGGER.info("Run 'roundtripper confluence ping' to test your connection")
+        sys.exit(1)
+
+    # Create pull service
+    service = PullService(client, output, dry_run=dry_run)
+
+    if dry_run:
+        LOGGER.info("[DRY RUN] Showing what would be downloaded...")
+        LOGGER.info("")
+
+    # Perform pull
+    if space:
+        LOGGER.info("Pulling space: %s", space)
+        result = service.pull_space(space)
+    else:
+        assert page_id is not None  # for type checker
+        LOGGER.info("Pulling page: %d (recursive=%s)", page_id, recursive)
+        result = service.pull_page(page_id, recursive=recursive)
+
+    # Summary
+    LOGGER.info("")
+    LOGGER.info("=" * 70)
+    LOGGER.info("Pull Summary")
+    LOGGER.info("=" * 70)
+    LOGGER.info("Pages downloaded: %d", result.pages_downloaded)
+    LOGGER.info("Pages skipped (up to date): %d", result.pages_skipped)
+    LOGGER.info("Attachments downloaded: %d", result.attachments_downloaded)
+    LOGGER.info("Attachments skipped (up to date): %d", result.attachments_skipped)
+
+    if result.errors:
+        LOGGER.warning("Errors encountered: %d", len(result.errors))
+        for error in result.errors[:5]:  # Show first 5 errors
+            LOGGER.warning("  - %s", error)
+        if len(result.errors) > 5:
+            LOGGER.warning("  ... and %d more errors", len(result.errors) - 5)
+        sys.exit(1)
+
+    LOGGER.info("")
+    LOGGER.info("✓ Pull completed successfully!")
+    LOGGER.info("Output directory: %s", output.absolute())
+    sys.exit(0)
