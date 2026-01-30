@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from atlassian import Confluence
 from tqdm import tqdm
 
 from roundtripper.file_utils import build_page_path, save_file, save_json
@@ -21,7 +22,7 @@ class PullService:
 
     def __init__(
         self,
-        client: Any,
+        client: Confluence,
         output_dir: Path,
         *,
         dry_run: bool = False,
@@ -59,6 +60,7 @@ class PullService:
         LOGGER.info("Fetching space info for: %s", space_key)
 
         space_data = self.client.get_space(space_key, expand="homepage")
+        assert isinstance(space_data, dict)  # atlassian SDK return type is too broad
         space = SpaceInfo.from_api_response(space_data)
 
         if space.homepage_id is None:
@@ -126,11 +128,13 @@ class PullService:
 
         try:
             response = self.client.get(url, params=params)
+            assert isinstance(response, dict)  # atlassian SDK return type is too broad
             results.extend(response.get("results", []))
             next_path = response.get("_links", {}).get("next")
 
             while next_path:
                 response = self.client.get(next_path)
+                assert isinstance(response, dict)  # atlassian SDK return type is too broad
                 results.extend(response.get("results", []))
                 next_path = response.get("_links", {}).get("next")
 
@@ -154,6 +158,7 @@ class PullService:
                 expand="body.storage,body.view,body.export_view,body.editor2,"
                 "metadata.labels,ancestors,version,space",
             )
+            assert isinstance(page_data, dict)  # atlassian SDK return type is too broad
             page = PageInfo.from_api_response(page_data)
         except Exception as e:
             error_msg = f"Failed to fetch page {page_id}: {e}"
@@ -210,6 +215,7 @@ class PullService:
             else:
                 try:
                     ancestor_data = self.client.get_page_by_id(ancestor_id, expand="")
+                    assert isinstance(ancestor_data, dict)  # atlassian SDK return type is too broad
                     title = ancestor_data.get("title", f"Page-{ancestor_id}")
                     self._ancestor_cache[ancestor_id] = title
                     titles.append(title)
@@ -289,6 +295,7 @@ class PullService:
                     limit=limit,
                     expand="version",
                 )
+                assert isinstance(response, dict)  # atlassian SDK return type is too broad
             except Exception as e:  # pragma: no cover
                 LOGGER.warning("Failed to fetch attachments for page %d: %s", page_id, e)
                 break

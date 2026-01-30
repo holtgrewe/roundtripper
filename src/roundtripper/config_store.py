@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from roundtripper.config import AuthConfig, ConfigModel, ConnectionConfig
 
@@ -173,7 +173,6 @@ def get_default_value_by_path(path: str | None = None) -> Any:
         else:
             msg = f"Invalid config path: {path}"
             raise KeyError(msg)
-    from pydantic import BaseModel
 
     if isinstance(current, BaseModel):
         return current.model_dump()

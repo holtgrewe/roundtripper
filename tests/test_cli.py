@@ -127,8 +127,8 @@ class TestConfluenceConfigCommand:
 
     def test_config_interactive_menu(self, mocker: MockerFixture, temp_config_file: Path) -> None:
         """Test that config without --show opens interactive menu."""
-        # Mock the interactive menu function - import happens inside config function
-        mock_menu = mocker.patch("roundtripper.config_interactive.main_config_menu_loop")
+        # Mock the interactive menu function at the top level where it's imported
+        mock_menu = mocker.patch("roundtripper.confluence.main_config_menu_loop")
 
         # Run the command without --show flag
         app(["confluence", "config"], result_action="return_value")
@@ -138,8 +138,8 @@ class TestConfluenceConfigCommand:
 
     def test_config_jump_to_parameter(self, mocker: MockerFixture, temp_config_file: Path) -> None:
         """Test that --jump-to parameter is passed to interactive menu."""
-        # Mock the interactive menu function - import happens inside config function
-        mock_menu = mocker.patch("roundtripper.config_interactive.main_config_menu_loop")
+        # Mock the interactive menu function at the top level where it's imported
+        mock_menu = mocker.patch("roundtripper.confluence.main_config_menu_loop")
 
         # Run the command with --jump-to
         app(
@@ -214,58 +214,18 @@ class TestConfluenceConfigCommand:
         )
         mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
 
-        # Mock httpx.Client
-        mock_response = mocker.Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"size": 1}
-
+        # Mock get_confluence_client to return a mock client
         mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.return_value = mock_response
+        mock_client.get_all_spaces.return_value = {"results": [], "size": 1}
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
+        app(["confluence", "ping"], result_action="return_value")
 
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
+        # Should not raise SystemExit on success
+        mock_client.get_all_spaces.assert_called_once_with(limit=1)
 
-        assert exc_info.value.code == 0
-
-    def test_ping_success_no_size(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with successful connection but no size in response."""
-        from roundtripper.config import ConfigModel
-
-        test_config = ConfigModel.model_validate(
-            {
-                "auth": {
-                    "confluence": {
-                        "url": "https://example.atlassian.net",
-                        "pat": "test-pat-token",
-                    }
-                }
-            }
-        )
-        mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        # Mock httpx.Client with response lacking "size" field
-        mock_response = mocker.Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"results": []}
-
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.return_value = mock_response
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
-
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
-
-        assert exc_info.value.code == 0
-
-    def test_ping_auth_failure(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with authentication failure."""
+    def test_ping_connection_failure(self, mocker: MockerFixture, temp_config_file: Path) -> None:
+        """Test ping command with connection failure."""
         from roundtripper.config import ConfigModel
 
         test_config = ConfigModel.model_validate(
@@ -281,16 +241,11 @@ class TestConfluenceConfigCommand:
         )
         mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
 
-        # Mock httpx.Client with 401 response
-        mock_response = mocker.Mock()
-        mock_response.status_code = 401
-
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.return_value = mock_response
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
+        # Mock get_confluence_client to raise ConnectionError
+        mocker.patch(
+            "roundtripper.confluence.get_confluence_client",
+            side_effect=ConnectionError("Authentication failed"),
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             app(["confluence", "ping"], result_action="return_value")
@@ -305,102 +260,6 @@ class TestConfluenceConfigCommand:
             {"auth": {"confluence": {"url": "https://example.atlassian.net"}}}
         )
         mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
-
-        assert exc_info.value.code == 1
-
-    def test_ping_forbidden(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with 403 forbidden response."""
-        from roundtripper.config import ConfigModel
-
-        test_config = ConfigModel.model_validate(
-            {
-                "auth": {
-                    "confluence": {
-                        "url": "https://example.atlassian.net",
-                        "pat": "test-pat",
-                    }
-                }
-            }
-        )
-        mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        # Mock httpx.Client with 403 response
-        mock_response = mocker.Mock()
-        mock_response.status_code = 403
-
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.return_value = mock_response
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
-
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
-
-        assert exc_info.value.code == 1
-
-    def test_ping_unexpected_response(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with unexpected response code."""
-        from roundtripper.config import ConfigModel
-
-        test_config = ConfigModel.model_validate(
-            {
-                "auth": {
-                    "confluence": {
-                        "url": "https://example.atlassian.net",
-                        "pat": "test-pat",
-                    }
-                }
-            }
-        )
-        mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        # Mock httpx.Client with 500 response
-        mock_response = mocker.Mock()
-        mock_response.status_code = 500
-        mock_response.reason_phrase = "Internal Server Error"
-
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.return_value = mock_response
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
-
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
-
-        assert exc_info.value.code == 1
-
-    def test_ping_timeout(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with timeout."""
-        import httpx
-
-        from roundtripper.config import ConfigModel
-
-        test_config = ConfigModel.model_validate(
-            {
-                "auth": {
-                    "confluence": {
-                        "url": "https://example.atlassian.net",
-                        "pat": "test-pat",
-                    }
-                }
-            }
-        )
-        mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        # Mock httpx.Client to raise TimeoutException
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.side_effect = httpx.TimeoutException("Request timeout")
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
 
         with pytest.raises(SystemExit) as exc_info:
             app(["confluence", "ping"], result_action="return_value")
@@ -423,44 +282,11 @@ class TestConfluenceConfigCommand:
         )
         mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
 
-        # Mock httpx.Client to raise a generic exception
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.side_effect = ValueError("Unexpected error")
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
-
-        with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "ping"], result_action="return_value")
-
-        assert exc_info.value.code == 1
-
-    def test_ping_connection_error(self, mocker: MockerFixture, temp_config_file: Path) -> None:
-        """Test ping command with connection error."""
-        import httpx
-
-        from roundtripper.config import ConfigModel
-
-        test_config = ConfigModel.model_validate(
-            {
-                "auth": {
-                    "confluence": {
-                        "url": "https://example.atlassian.net",
-                        "pat": "test-pat",
-                    }
-                }
-            }
+        # Mock get_confluence_client to raise a generic exception
+        mocker.patch(
+            "roundtripper.confluence.get_confluence_client",
+            side_effect=RuntimeError("Unexpected error"),
         )
-        mocker.patch("roundtripper.confluence.get_settings", return_value=test_config)
-
-        # Mock httpx.Client to raise ConnectError
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.get.side_effect = httpx.ConnectError("Connection failed")
-
-        mocker.patch("roundtripper.confluence.httpx.Client", return_value=mock_client)
 
         with pytest.raises(SystemExit) as exc_info:
             app(["confluence", "ping"], result_action="return_value")
@@ -523,7 +349,7 @@ class TestConfluencePullCommand:
     def test_pull_connection_error(self, mocker: MockerFixture, temp_config_file: Path) -> None:
         """Test pull command handles connection error."""
         mocker.patch(
-            "roundtripper.api_client.get_confluence_client",
+            "roundtripper.confluence.get_confluence_client",
             side_effect=ConnectionError("Failed to connect"),
         )
 
@@ -539,22 +365,20 @@ class TestConfluencePullCommand:
         from roundtripper.models import PullResult
 
         mock_client = mocker.MagicMock()
-        mocker.patch("roundtripper.api_client.get_confluence_client", return_value=mock_client)
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mock_service = mocker.MagicMock()
-        mock_service.pull_space.return_value = PullResult(
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_space.return_value = PullResult(
             pages_downloaded=5, attachments_downloaded=3
         )
-        mocker.patch("roundtripper.pull_service.PullService", return_value=mock_service)
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
 
-        with pytest.raises(SystemExit) as exc_info:
-            app(
-                ["confluence", "pull", "--space", "SPACE", "--output", str(tmp_path)],
-                result_action="return_value",
-            )
+        app(
+            ["confluence", "pull", "--space", "SPACE", "--output", str(tmp_path)],
+            result_action="return_value",
+        )
 
-        assert exc_info.value.code == 0
-        mock_service.pull_space.assert_called_once_with("SPACE")
+        mock_service_instance.pull_space.assert_called_once_with("SPACE")
 
     def test_pull_page_success(
         self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
@@ -563,23 +387,21 @@ class TestConfluencePullCommand:
         from roundtripper.models import PullResult
 
         mock_client = mocker.MagicMock()
-        mocker.patch("roundtripper.api_client.get_confluence_client", return_value=mock_client)
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mock_service = mocker.MagicMock()
-        mock_service.pull_page.return_value = PullResult(
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_page.return_value = PullResult(
             pages_downloaded=1, attachments_downloaded=0
         )
-        mocker.patch("roundtripper.pull_service.PullService", return_value=mock_service)
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
 
-        with pytest.raises(SystemExit) as exc_info:
-            app(
-                ["confluence", "pull", "--page-id", "12345", "--output", str(tmp_path)],
-                result_action="return_value",
-            )
+        app(
+            ["confluence", "pull", "--page-id", "12345", "--output", str(tmp_path)],
+            result_action="return_value",
+        )
 
-        assert exc_info.value.code == 0
         # Default is recursive=True
-        mock_service.pull_page.assert_called_once_with(12345, recursive=True)
+        mock_service_instance.pull_page.assert_called_once_with(12345, recursive=True)
 
     def test_pull_page_recursive(
         self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
@@ -588,30 +410,28 @@ class TestConfluencePullCommand:
         from roundtripper.models import PullResult
 
         mock_client = mocker.MagicMock()
-        mocker.patch("roundtripper.api_client.get_confluence_client", return_value=mock_client)
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mock_service = mocker.MagicMock()
-        mock_service.pull_page.return_value = PullResult(
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_page.return_value = PullResult(
             pages_downloaded=5, attachments_downloaded=0
         )
-        mocker.patch("roundtripper.pull_service.PullService", return_value=mock_service)
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
 
-        with pytest.raises(SystemExit) as exc_info:
-            app(
-                [
-                    "confluence",
-                    "pull",
-                    "--page-id",
-                    "12345",
-                    "--no-recursive",
-                    "--output",
-                    str(tmp_path),
-                ],
-                result_action="return_value",
-            )
+        app(
+            [
+                "confluence",
+                "pull",
+                "--page-id",
+                "12345",
+                "--no-recursive",
+                "--output",
+                str(tmp_path),
+            ],
+            result_action="return_value",
+        )
 
-        assert exc_info.value.code == 0
-        mock_service.pull_page.assert_called_once_with(12345, recursive=False)
+        mock_service_instance.pull_page.assert_called_once_with(12345, recursive=False)
 
     def test_pull_with_errors(
         self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
@@ -647,15 +467,15 @@ class TestConfluencePullCommand:
         from roundtripper.models import PullResult
 
         mock_client = mocker.MagicMock()
-        mocker.patch("roundtripper.api_client.get_confluence_client", return_value=mock_client)
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mock_service = mocker.MagicMock()
+        mock_service_instance = mocker.MagicMock()
         # Create 7 errors to trigger the truncation message
-        mock_service.pull_space.return_value = PullResult(
+        mock_service_instance.pull_space.return_value = PullResult(
             pages_downloaded=0,
             errors=[f"Error {i}" for i in range(7)],
         )
-        mocker.patch("roundtripper.pull_service.PullService", return_value=mock_service)
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
 
         with pytest.raises(SystemExit) as exc_info:
             app(
@@ -683,28 +503,26 @@ class TestConfluencePullCommand:
         caplog.set_level(logging.INFO)
 
         mock_client = mocker.MagicMock()
-        mocker.patch("roundtripper.api_client.get_confluence_client", return_value=mock_client)
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
 
-        mock_service = mocker.MagicMock()
-        mock_service.pull_space.return_value = PullResult(
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.pull_space.return_value = PullResult(
             pages_downloaded=5, attachments_downloaded=3
         )
-        mocker.patch("roundtripper.pull_service.PullService", return_value=mock_service)
+        mocker.patch("roundtripper.confluence.PullService", return_value=mock_service_instance)
 
-        with pytest.raises(SystemExit) as exc_info:
-            app(
-                [
-                    "confluence",
-                    "pull",
-                    "--space",
-                    "SPACE",
-                    "--dry-run",
-                    "--output",
-                    str(tmp_path),
-                ],
-                result_action="return_value",
-            )
+        app(
+            [
+                "confluence",
+                "pull",
+                "--space",
+                "SPACE",
+                "--dry-run",
+                "--output",
+                str(tmp_path),
+            ],
+            result_action="return_value",
+        )
 
-        assert exc_info.value.code == 0
         # Verify dry_run output is shown in logs
         assert "DRY RUN" in caplog.text
