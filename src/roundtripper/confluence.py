@@ -198,6 +198,7 @@ def pull(
 
 @app.command
 def push(
+    message: str,
     *,
     page_path: Path | None = None,
     space_path: Path | None = None,
@@ -213,6 +214,8 @@ def push(
 
     Parameters
     ----------
+    message
+        Version comment/message for the update (required).
     page_path
         Path to a page directory to push (contains page.xml and page.json).
     space_path
@@ -253,7 +256,7 @@ def push(
         raise SystemExit(1) from e
 
     # Create push service
-    service = PushService(client, dry_run=dry_run, force=force)
+    service = PushService(client, message=message, dry_run=dry_run, force=force)
 
     if dry_run:
         LOGGER.info("[DRY RUN] Analyzing changes...")

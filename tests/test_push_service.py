@@ -21,7 +21,7 @@ def mock_client() -> MagicMock:
 @pytest.fixture
 def push_service(mock_client: MagicMock) -> PushService:
     """Create a PushService instance with mock client."""
-    return PushService(client=mock_client)
+    return PushService(client=mock_client, message="Test update")
 
 
 def create_page_directory(
@@ -84,18 +84,19 @@ class TestPushServiceInit:
 
     def test_default_settings(self, mock_client: MagicMock) -> None:
         """Test default settings are applied."""
-        service = PushService(client=mock_client)
+        service = PushService(client=mock_client, message="Test message")
         assert service.dry_run is False
         assert service.force is False
+        assert service.message == "Test message"
 
     def test_dry_run_flag(self, mock_client: MagicMock) -> None:
         """Test dry run flag is set."""
-        service = PushService(client=mock_client, dry_run=True)
+        service = PushService(client=mock_client, message="Test", dry_run=True)
         assert service.dry_run is True
 
     def test_force_flag(self, mock_client: MagicMock) -> None:
         """Test force flag is set."""
-        service = PushService(client=mock_client, force=True)
+        service = PushService(client=mock_client, message="Test", force=True)
         assert service.force is True
 
 
@@ -136,7 +137,7 @@ class TestPushPage:
 
     def test_push_page_dry_run(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run doesn't actually push."""
-        service = PushService(client=mock_client, dry_run=True)
+        service = PushService(client=mock_client, message="Test update", dry_run=True)
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify the local content
@@ -177,7 +178,7 @@ class TestPushPage:
 
     def test_push_page_force_conflict(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test force push ignores conflicts."""
-        service = PushService(client=mock_client, force=True)
+        service = PushService(client=mock_client, message="Force update", force=True)
         page_dir = create_page_directory(
             tmp_path, "Test Page", content="<p>Original</p>", version=1
         )
@@ -451,7 +452,7 @@ class TestDryRunBehavior:
 
     def test_dry_run_with_attachments(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run with attachment changes."""
-        service = PushService(client=mock_client, dry_run=True)
+        service = PushService(client=mock_client, message="Dry run", dry_run=True)
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify content
@@ -473,7 +474,7 @@ class TestDryRunBehavior:
 
     def test_dry_run_shows_conflicts(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run still detects conflicts."""
-        service = PushService(client=mock_client, dry_run=True, force=True)
+        service = PushService(client=mock_client, message="Conflict test", dry_run=True, force=True)
         page_dir = create_page_directory(
             tmp_path, "Test Page", content="<p>Original</p>", version=1
         )

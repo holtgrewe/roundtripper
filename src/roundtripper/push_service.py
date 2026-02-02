@@ -23,6 +23,7 @@ class PushService:
     def __init__(
         self,
         client: Confluence,
+        message: str,
         *,
         dry_run: bool = False,
         force: bool = False,
@@ -33,12 +34,15 @@ class PushService:
         ----------
         client
             Confluence API client (atlassian-python-api Confluence instance).
+        message
+            Version comment/message for updates.
         dry_run
             If True, only show what would be pushed without actually pushing.
         force
             If True, push even if there are version conflicts.
         """
         self.client = client
+        self.message = message
         self.dry_run = dry_run
         self.force = force
         self.result = PushResult()
@@ -243,6 +247,7 @@ class PushService:
             title=page_info.title,
             body=content,
             type="page",
+            version_comment=self.message,
         )
 
     def _push_attachments(self, page_path: Path, page_id: int) -> None:
