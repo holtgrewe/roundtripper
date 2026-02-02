@@ -9,6 +9,7 @@ import logging
 import re
 import shutil
 import subprocess
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -46,16 +47,38 @@ def format_xml(xml_content: str, max_line_length: int = 120) -> str:
         LOGGER.debug("xmllint not available, returning unformatted XML")
         return xml_content
 
+    # Wrap XML fragments with a temporary root element to ensure valid XML
+    # This handles cases like <p>One</p><p>Two</p> which have multiple roots
+    wrapped_xml = f"<root>{xml_content}</root>"
+
     try:
         # Use xmllint to format the XML
         result = subprocess.run(
             ["xmllint", "--format", "-"],
-            input=xml_content.encode("utf-8"),
+            input=wrapped_xml.encode("utf-8"),
             capture_output=True,
             check=True,
             timeout=10,
         )
-        return result.stdout.decode("utf-8")
+        formatted_output = result.stdout.decode("utf-8")
+
+        # Remove the temporary root wrapper and XML declaration
+        # Find content between <root> and </root>
+        start_tag = "<root>"
+        end_tag = "</root>"
+        start_idx = formatted_output.find(start_tag)
+        end_idx = formatted_output.find(end_tag)
+
+        if start_idx != -1 and end_idx != -1:
+            # Extract content between root tags
+            content = formatted_output[start_idx + len(start_tag) : end_idx]
+            # Remove leading/trailing whitespace and dedent to remove wrapper indentation
+            return textwrap.dedent(content).strip()
+        else:
+            # If we can't find the tags, return original content
+            LOGGER.warning("Could not find root tags in formatted output")
+            return xml_content
+
     except subprocess.CalledProcessError as e:
         LOGGER.warning("xmllint formatting failed: %s", e.stderr.decode("utf-8", errors="ignore"))
         return xml_content
