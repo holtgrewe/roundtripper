@@ -5,52 +5,65 @@ https://github.com/Spenhouet/confluence-markdown-exporter
 """
 
 import json
+import logging
 import re
-import xml.dom.minidom
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
+#: Logger instance.
+LOGGER = logging.getLogger(__name__)
+
+
+def is_xmllint_available() -> bool:
+    """Check if xmllint is available on the system.
+
+    Returns
+    -------
+    bool
+        True if xmllint is found in PATH.
+    """
+    return shutil.which("xmllint") is not None
+
 
 def format_xml(xml_content: str, max_line_length: int = 120) -> str:
-    """Format XML with proper indentation and line wrapping.
+    """Format XML with proper indentation using xmllint.
 
     Parameters
     ----------
     xml_content
         Raw XML content to format.
     max_line_length
-        Maximum line length before wrapping.
+        Maximum line length before wrapping (currently unused, kept for API compatibility).
 
     Returns
     -------
     str
         Formatted XML string with proper indentation.
     """
+    if not is_xmllint_available():
+        LOGGER.debug("xmllint not available, returning unformatted XML")
+        return xml_content
+
     try:
-        # Add XML declaration if not present for better parsing
-        if not xml_content.strip().startswith("<?xml"):
-            xml_content = '<?xml version="1.0" encoding="utf-8"?>' + xml_content
-
-        # Parse and pretty-print the XML
-        dom = xml.dom.minidom.parseString(xml_content)
-        pretty_xml = dom.toprettyxml(indent="  ", encoding="utf-8").decode("utf-8")
-
-        # Remove extra blank lines that minidom creates
-        lines = [line for line in pretty_xml.split("\n") if line.strip()]
-
-        # Join lines and handle wrapping for long lines
-        result_lines = []
-        for line in lines:
-            # If line is too long and contains attributes, try to wrap
-            if len(line) > max_line_length and "=" in line and "<" in line:
-                # Simple wrapping: could be enhanced in the future
-                result_lines.append(line)
-            else:
-                result_lines.append(line)
-
-        return "\n".join(result_lines)
-    except Exception:
-        # If parsing fails, return original content
+        # Use xmllint to format the XML
+        result = subprocess.run(
+            ["xmllint", "--format", "-"],
+            input=xml_content.encode("utf-8"),
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+        return result.stdout.decode("utf-8")
+    except subprocess.CalledProcessError as e:
+        LOGGER.warning("xmllint formatting failed: %s", e.stderr.decode("utf-8", errors="ignore"))
+        return xml_content
+    except subprocess.TimeoutExpired:
+        LOGGER.warning("xmllint formatting timed out")
+        return xml_content
+    except Exception as e:  # pragma: no cover
+        LOGGER.warning("Unexpected error formatting XML: %s", e)
         return xml_content
 
 

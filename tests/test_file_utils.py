@@ -1,76 +1,147 @@
 """Tests for file utility functions."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from roundtripper.file_utils import (
     build_page_path,
     format_xml,
+    is_xmllint_available,
     sanitize_filename,
     save_file,
     save_json,
 )
 
 
+class TestIsXmllintAvailable:
+    """Tests for is_xmllint_available function."""
+
+    def test_xmllint_available(self) -> None:
+        """Test detection when xmllint is available."""
+        with patch("shutil.which", return_value="/usr/bin/xmllint"):
+            assert is_xmllint_available() is True
+
+    def test_xmllint_not_available(self) -> None:
+        """Test detection when xmllint is not available."""
+        with patch("shutil.which", return_value=None):
+            assert is_xmllint_available() is False
+
+
 class TestFormatXml:
     """Tests for format_xml function."""
 
-    def test_format_simple_xml(self) -> None:
-        """Test formatting simple XML content."""
+    def test_format_simple_xml_with_xmllint(self) -> None:
+        """Test formatting simple XML content with xmllint."""
         xml = "<root><child>value</child></root>"
-        formatted = format_xml(xml)
 
-        assert "<?xml" in formatted
-        assert "<root>" in formatted
-        assert "  <child>" in formatted
-        assert "value" in formatted
+        # Mock subprocess.run to simulate xmllint
+        formatted_output = '<?xml version="1.0"?>\n<root>\n  <child>value</child>\n</root>\n'
+        mock_result = MagicMock()
+        mock_result.stdout = formatted_output.encode("utf-8")
+
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            formatted = format_xml(xml)
+
+            # Verify xmllint was called correctly
+            mock_run.assert_called_once()
+            call_args = mock_run.call_args
+            assert call_args[0][0] == ["xmllint", "--format", "-"]
+            assert call_args[1]["input"] == xml.encode("utf-8")
+
+            # Verify output
+            assert "<?xml" in formatted
+            assert "<root>" in formatted
+            assert "  <child>" in formatted
+            assert "value" in formatted
+
+    def test_format_xml_without_xmllint(self) -> None:
+        """Test formatting returns original content when xmllint is not available."""
+        xml = "<root><child>value</child></root>"
+
+        with patch("roundtripper.file_utils.is_xmllint_available", return_value=False):
+            formatted = format_xml(xml)
+
+            # Should return original content unchanged
+            assert formatted == xml
 
     def test_format_xml_with_attributes(self) -> None:
         """Test formatting XML with attributes."""
         xml = '<root attr="value"><child>text</child></root>'
-        formatted = format_xml(xml)
 
-        assert "<?xml" in formatted
-        assert 'attr="value"' in formatted
-        assert "<child>" in formatted
+        formatted_output = (
+            '<?xml version="1.0"?>\n<root attr="value">\n  <child>text</child>\n</root>\n'
+        )
+        mock_result = MagicMock()
+        mock_result.stdout = formatted_output.encode("utf-8")
 
-    def test_format_xml_removes_blank_lines(self) -> None:
-        """Test that extra blank lines are removed."""
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            formatted = format_xml(xml)
+
+            assert "<?xml" in formatted
+            assert 'attr="value"' in formatted
+            assert "<child>" in formatted
+
+    def test_format_xml_handles_subprocess_error(self) -> None:
+        """Test that subprocess errors are handled gracefully."""
+        import subprocess
+
         xml = "<root><child>value</child></root>"
-        formatted = format_xml(xml)
 
-        # Should not have multiple consecutive blank lines
-        assert "\n\n\n" not in formatted
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch(
+                "subprocess.run",
+                side_effect=subprocess.CalledProcessError(1, "xmllint", stderr=b"error"),
+            ),
+        ):
+            formatted = format_xml(xml)
 
-    def test_format_xml_handles_invalid_xml(self) -> None:
-        """Test that invalid XML is handled gracefully."""
-        invalid_xml = "<root><unclosed>"
-        formatted = format_xml(invalid_xml)
+            # Should return original content on error
+            assert formatted == xml
 
-        # The function adds XML declaration before parsing, so invalid XML
-        # will have the declaration prepended before it fails parsing
-        assert "<?xml" in formatted or formatted == invalid_xml
+    def test_format_xml_handles_timeout(self) -> None:
+        """Test that timeout is handled gracefully."""
+        import subprocess
+
+        xml = "<root><child>value</child></root>"
+
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch("subprocess.run", side_effect=subprocess.TimeoutExpired("xmllint", 10)),
+        ):
+            formatted = format_xml(xml)
+
+            # Should return original content on timeout
+            assert formatted == xml
 
     def test_format_xml_preserves_content(self) -> None:
         """Test that XML content is preserved."""
         xml = "<ac:structured-macro><ac:parameter>Test</ac:parameter></ac:structured-macro>"
-        formatted = format_xml(xml)
 
-        assert "ac:structured-macro" in formatted
-        assert "ac:parameter" in formatted
-        assert "Test" in formatted
+        formatted_output = (
+            '<?xml version="1.0"?>\n<ac:structured-macro>\n'
+            "  <ac:parameter>Test</ac:parameter>\n</ac:structured-macro>\n"
+        )
+        mock_result = MagicMock()
+        mock_result.stdout = formatted_output.encode("utf-8")
 
-    def test_format_xml_with_long_lines(self) -> None:
-        """Test that long lines are preserved."""
-        # Create XML with a very long line
-        long_attr = "a" * 150
-        xml = f'<root attr="{long_attr}"><child>value</child></root>'
-        formatted = format_xml(xml)
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            formatted = format_xml(xml)
 
-        # Should still be properly formatted even if line is long
-        assert "<root" in formatted
-        assert "<child>" in formatted
+            assert "ac:structured-macro" in formatted
+            assert "ac:parameter" in formatted
+            assert "Test" in formatted
 
 
 class TestSanitizeFilename:
