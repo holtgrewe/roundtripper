@@ -187,7 +187,10 @@ class PushService:
             self.result.errors.append(error_msg)
 
     def _has_content_changed(self, page_info: PageInfo, local_content: str) -> bool:
-        """Check if local content differs from stored content.
+        """Check if local content differs from current server content.
+
+        Fetches the current content from the server and compares it with the local content
+        to avoid creating empty versions.
 
         Parameters
         ----------
@@ -201,8 +204,41 @@ class PushService:
         bool
             True if content has changed, False otherwise.
         """
-        stored_content = page_info.body_storage
-        return local_content.strip() != stored_content.strip()
+        try:
+            # Fetch current content from server with storage format
+            server_response = self.client.get_page_by_id(
+                page_info.id, expand="body.storage,version"
+            )
+            assert isinstance(server_response, dict)
+            server_content = server_response.get("body", {}).get("storage", {}).get("value", "")
+
+            # Compare normalized content (strip whitespace)
+            local_normalized = local_content.strip()
+            server_normalized = server_content.strip()
+
+            if local_normalized == server_normalized:
+                LOGGER.debug(
+                    "Content identical to server for page %d (%s)",
+                    page_info.id,
+                    page_info.title,
+                )
+                return False
+
+            LOGGER.debug(
+                "Content differs from server for page %d (%s)",
+                page_info.id,
+                page_info.title,
+            )
+            return True
+        except Exception as e:  # pragma: no cover
+            # If we can't fetch from server, fall back to comparing with stored content
+            LOGGER.warning(
+                "Could not fetch server content for page %d: %s. Falling back to local comparison.",
+                page_info.id,
+                e,
+            )
+            stored_content = page_info.body_storage
+            return local_content.strip() != stored_content.strip()
 
     def _check_version_conflict(self, page_info: PageInfo) -> str | None:
         """Check if server version is newer than local metadata.
