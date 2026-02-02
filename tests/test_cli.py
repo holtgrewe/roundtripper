@@ -567,6 +567,7 @@ class TestConfluencePushCommand:
         app(["confluence", "push", "--help"], result_action="return_value")
 
         captured = capsys.readouterr()
+        assert "message" in captured.out.lower()
         assert "--page-path" in captured.out
         assert "--space-path" in captured.out
         assert "--recursive" in captured.out
@@ -576,7 +577,7 @@ class TestConfluencePushCommand:
     def test_push_no_path_specified(self, mocker: MockerFixture) -> None:
         """Test push command fails without --page-path or --space-path."""
         with pytest.raises(SystemExit) as exc_info:
-            app(["confluence", "push"], result_action="return_value")
+            app(["confluence", "push", "Test message"], result_action="return_value")
 
         assert exc_info.value.code == 1
 
@@ -592,6 +593,7 @@ class TestConfluencePushCommand:
                 [
                     "confluence",
                     "push",
+                    "Test message",
                     "--page-path",
                     str(page_path),
                     "--space-path",
@@ -609,6 +611,7 @@ class TestConfluencePushCommand:
                 [
                     "confluence",
                     "push",
+                    "Test message",
                     "--page-path",
                     str(tmp_path / "nonexistent"),
                 ],
@@ -631,7 +634,7 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "--page-path", str(page_path)],
+                ["confluence", "push", "Test message", "--page-path", str(page_path)],
                 result_action="return_value",
             )
 
@@ -654,7 +657,7 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "--page-path", str(page_path)],
+            ["confluence", "push", "Update page", "--page-path", str(page_path)],
             result_action="return_value",
         )
 
@@ -677,7 +680,14 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "--page-path", str(page_path), "--recursive"],
+            [
+                "confluence",
+                "push",
+                "Recursive update",
+                "--page-path",
+                str(page_path),
+                "--recursive",
+            ],
             result_action="return_value",
         )
 
@@ -700,7 +710,7 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "--space-path", str(space_path)],
+            ["confluence", "push", "Update space", "--space-path", str(space_path)],
             result_action="return_value",
         )
 
@@ -727,7 +737,7 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "--page-path", str(page_path)],
+                ["confluence", "push", "Conflict test", "--page-path", str(page_path)],
                 result_action="return_value",
             )
 
@@ -759,7 +769,7 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "--page-path", str(page_path)],
+                ["confluence", "push", "Many conflicts", "--page-path", str(page_path)],
                 result_action="return_value",
             )
 
@@ -794,7 +804,7 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "--page-path", str(page_path)],
+                ["confluence", "push", "Many errors", "--page-path", str(page_path)],
                 result_action="return_value",
             )
 
@@ -824,7 +834,7 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "--page-path", str(page_path)],
+                ["confluence", "push", "Error test", "--page-path", str(page_path)],
                 result_action="return_value",
             )
 
@@ -855,7 +865,7 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "--page-path", str(page_path), "--dry-run"],
+            ["confluence", "push", "Dry run test", "--page-path", str(page_path), "--dry-run"],
             result_action="return_value",
         )
 
@@ -880,12 +890,14 @@ class TestConfluencePushCommand:
         mock_service_class.return_value = mock_service_instance
 
         app(
-            ["confluence", "push", "--page-path", str(page_path), "--force"],
+            ["confluence", "push", "Force push", "--page-path", str(page_path), "--force"],
             result_action="return_value",
         )
 
         # Verify PushService was instantiated with force=True
-        mock_service_class.assert_called_once_with(mock_client, dry_run=False, force=True)
+        mock_service_class.assert_called_once_with(
+            mock_client, message="Force push", dry_run=False, force=True
+        )
 
     def test_push_verbose_flag(
         self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
@@ -906,7 +918,7 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "--page-path", str(page_path), "--verbose"],
+            ["confluence", "push", "Verbose test", "--page-path", str(page_path), "--verbose"],
             result_action="return_value",
         )
 
