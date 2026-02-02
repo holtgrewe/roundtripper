@@ -109,6 +109,12 @@ class TestPushPage:
         """Test that unchanged pages are skipped."""
         page_dir = create_page_directory(tmp_path, "Test Page")
 
+        # Mock server returning same content as local
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Content</p>"}},
+        }
+
         result = push_service.push_page(page_dir)
 
         assert result.pages_skipped == 1
@@ -126,8 +132,11 @@ class TestPushPage:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
-        # Mock version check
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        # Mock server returning original content (different from modified local)
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
 
         result = push_service.push_page(page_dir)
 
@@ -144,8 +153,11 @@ class TestPushPage:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
-        # Mock version check
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        # Mock server returning original content (different from modified local)
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
 
         result = service.push_page(page_dir)
 
@@ -166,8 +178,15 @@ class TestPushPage:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
-        # Server has newer version
-        mock_client.get_page_by_id.return_value = {"version": {"number": 3}}
+        # Mock server returning different content and newer version
+        # First call is for content check, second for version check
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 3},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },
+            {"version": {"number": 3}},
+        ]
 
         result = push_service.push_page(page_dir)
 
@@ -187,8 +206,15 @@ class TestPushPage:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
-        # Server has newer version
-        mock_client.get_page_by_id.return_value = {"version": {"number": 3}}
+        # Mock server returning different content and newer version
+        # First call for content check, second for version check
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 3},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },
+            {"version": {"number": 3}},
+        ]
 
         result = service.push_page(page_dir)
 
@@ -218,9 +244,14 @@ class TestPushPage:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified content</p>", encoding="utf-8")
 
-        # Version check fails with exception (get_page_by_id is used for version check)
-        # but update_page succeeds
-        mock_client.get_page_by_id.side_effect = Exception("Network error")
+        # First call for content check returns data, second for version check fails
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },
+            Exception("Network error"),
+        ]
         mock_client.update_page.return_value = {}
 
         result = push_service.push_page(page_dir)
@@ -248,8 +279,20 @@ class TestPushPage:
         child_confluence = child_dir / "page.xml"
         child_confluence.write_text("<p>Child Modified</p>", encoding="utf-8")
 
-        # Mock version checks
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        # Mock content checks and version checks
+        # Calls: parent content check, parent skip; child content check,
+        # child version check, child update
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Parent</p>"}},
+            },  # Parent unchanged
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Child Original</p>"}},
+            },  # Child changed
+            {"version": {"number": 1}},  # Child version check
+        ]
 
         result = push_service.push_page(parent_dir, recursive=True)
 
@@ -278,8 +321,19 @@ class TestPushSpace:
         page2_confluence = page2_dir / "page.xml"
         page2_confluence.write_text("<p>Page 2 Modified</p>", encoding="utf-8")
 
-        # Mock version checks
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        # Mock content checks and version checks
+        # Pages are processed in order: Page 2, then Page 1
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Page 2 Original</p>"}},
+            },  # Page 2 changed
+            {"version": {"number": 1}},  # Page 2 version check
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Page 1</p>"}},
+            },  # Page 1 unchanged
+        ]
 
         result = push_service.push_space(space_dir)
 
@@ -307,7 +361,13 @@ class TestPushAttachments:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },  # Content changed
+            {"version": {"number": 1}},  # Version check
+        ]
 
         result = push_service.push_page(page_dir)
 
@@ -337,7 +397,13 @@ class TestPushAttachments:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },  # Content changed
+            {"version": {"number": 1}},  # Version check
+        ]
 
         result = push_service.push_page(page_dir)
 
@@ -367,7 +433,13 @@ class TestPushAttachments:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },  # Content changed
+            {"version": {"number": 1}},  # Version check
+        ]
 
         result = push_service.push_page(page_dir)
 
@@ -388,8 +460,14 @@ class TestErrorHandling:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
-        # Mock version check success but update failure
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        # Mock content check success, version check success, but update failure
+        mock_client.get_page_by_id.side_effect = [
+            {
+                "version": {"number": 1},
+                "body": {"storage": {"value": "<p>Original</p>"}},
+            },  # Content changed
+            {"version": {"number": 1}},  # Version check
+        ]
         mock_client.update_page.side_effect = Exception("API Error")
 
         result = push_service.push_page(page_dir)
@@ -464,7 +542,10 @@ class TestDryRunBehavior:
         attachments_dir.mkdir()
         (attachments_dir / "new.pdf").write_bytes(b"content")
 
-        mock_client.get_page_by_id.return_value = {"version": {"number": 1}}
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
 
         service.push_page(page_dir)
 
@@ -483,8 +564,11 @@ class TestDryRunBehavior:
         xml_file = page_dir / "page.xml"
         xml_file.write_text("<p>Modified</p>", encoding="utf-8")
 
-        # Server has newer version
-        mock_client.get_page_by_id.return_value = {"version": {"number": 5}}
+        # Server has newer version - first call for content check, second for version check
+        mock_client.get_page_by_id.side_effect = [
+            {"version": {"number": 5}, "body": {"storage": {"value": "<p>Original</p>"}}},
+            {"version": {"number": 5}},
+        ]
 
         result = service.push_page(page_dir)
 
