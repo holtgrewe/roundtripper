@@ -657,7 +657,14 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "Update page", "--page-path", str(page_path)],
+            [
+                "confluence",
+                "push",
+                "Update page",
+                "--page-path",
+                str(page_path),
+                "--no-interactive",
+            ],
             result_action="return_value",
         )
 
@@ -687,6 +694,7 @@ class TestConfluencePushCommand:
                 "--page-path",
                 str(page_path),
                 "--recursive",
+                "--no-interactive",
             ],
             result_action="return_value",
         )
@@ -737,7 +745,14 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "Conflict test", "--page-path", str(page_path)],
+                [
+                    "confluence",
+                    "push",
+                    "Conflict test",
+                    "--page-path",
+                    str(page_path),
+                    "--no-interactive",
+                ],
                 result_action="return_value",
             )
 
@@ -769,7 +784,14 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "Many conflicts", "--page-path", str(page_path)],
+                [
+                    "confluence",
+                    "push",
+                    "Many conflicts",
+                    "--page-path",
+                    str(page_path),
+                    "--no-interactive",
+                ],
                 result_action="return_value",
             )
 
@@ -804,7 +826,14 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "Many errors", "--page-path", str(page_path)],
+                [
+                    "confluence",
+                    "push",
+                    "Many errors",
+                    "--page-path",
+                    str(page_path),
+                    "--no-interactive",
+                ],
                 result_action="return_value",
             )
 
@@ -834,7 +863,14 @@ class TestConfluencePushCommand:
 
         with pytest.raises(SystemExit) as exc_info:
             app(
-                ["confluence", "push", "Error test", "--page-path", str(page_path)],
+                [
+                    "confluence",
+                    "push",
+                    "Error test",
+                    "--page-path",
+                    str(page_path),
+                    "--no-interactive",
+                ],
                 result_action="return_value",
             )
 
@@ -890,13 +926,21 @@ class TestConfluencePushCommand:
         mock_service_class.return_value = mock_service_instance
 
         app(
-            ["confluence", "push", "Force push", "--page-path", str(page_path), "--force"],
+            [
+                "confluence",
+                "push",
+                "Force push",
+                "--page-path",
+                str(page_path),
+                "--force",
+                "--no-interactive",
+            ],
             result_action="return_value",
         )
 
-        # Verify PushService was instantiated with force=True
+        # Verify PushService was instantiated with force=True and interactive=False
         mock_service_class.assert_called_once_with(
-            mock_client, message="Force push", dry_run=False, force=True
+            mock_client, message="Force push", dry_run=False, force=True, interactive=False
         )
 
     def test_push_verbose_flag(
@@ -918,7 +962,15 @@ class TestConfluencePushCommand:
         mocker.patch("roundtripper.confluence.PushService", return_value=mock_service_instance)
 
         app(
-            ["confluence", "push", "Verbose test", "--page-path", str(page_path), "--verbose"],
+            [
+                "confluence",
+                "push",
+                "Verbose test",
+                "--page-path",
+                str(page_path),
+                "--verbose",
+                "--no-interactive",
+            ],
             result_action="return_value",
         )
 

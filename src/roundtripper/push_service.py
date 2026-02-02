@@ -3,6 +3,7 @@
 This module contains the business logic for pushing Confluence content.
 """
 
+import difflib
 import hashlib
 import json
 import logging
@@ -11,7 +12,9 @@ from pathlib import Path
 from atlassian import Confluence
 from tqdm import tqdm
 
+from roundtripper.file_utils import format_xml
 from roundtripper.models import PageInfo, PushResult
+from roundtripper.pull_service import PullService
 
 #: Logger instance.
 LOGGER = logging.getLogger(__name__)
@@ -27,6 +30,7 @@ class PushService:
         *,
         dry_run: bool = False,
         force: bool = False,
+        interactive: bool = True,
     ) -> None:
         """Initialize the push service.
 
@@ -40,11 +44,14 @@ class PushService:
             If True, only show what would be pushed without actually pushing.
         force
             If True, push even if there are version conflicts.
+        interactive
+            If True, prompt for confirmation before updating each page.
         """
         self.client = client
         self.message = message
         self.dry_run = dry_run
         self.force = force
+        self.interactive = interactive
         self.result = PushResult()
 
     def push_page(self, page_path: Path, *, recursive: bool = False) -> PushResult:
@@ -132,9 +139,10 @@ class PushService:
                 page_info.version.number,
             )
 
-            # Check if content has changed
+            # Check if content has changed and get server content for diff
             LOGGER.debug("Checking if content has changed for: %s", page_info.title)
-            if not self._has_content_changed(page_info, local_content):
+            server_content = self._get_server_content(page_info)
+            if not self._has_content_changed_with_server(local_content, server_content):
                 LOGGER.debug("Skipping %s: content unchanged", page_info.title)
                 self.result.pages_skipped += 1
                 return
@@ -163,7 +171,23 @@ class PushService:
                         page_info.version.number,
                         page_info.version.number + 1,
                     )
+                # Show diff in dry-run mode
+                self._show_diff(page_info.title, server_content, local_content)
             else:
+                # Show diff if interactive mode
+                if self.interactive:
+                    self._show_diff(page_info.title, server_content, local_content)
+                    LOGGER.info("")
+                    response = input(f"Update '{page_info.title}'? [Y/n/q]: ").strip().lower()
+                    if response == "q":
+                        LOGGER.info("Quitting at user request")
+                        raise SystemExit(0)
+                    if response == "n":
+                        LOGGER.info("Skipped: %s", page_info.title)
+                        self.result.pages_skipped += 1
+                        return
+                    # Empty or 'y' continues
+
                 LOGGER.debug(
                     "Calling update_page: page_id=%d, title=%s",
                     page_info.id,
@@ -178,6 +202,10 @@ class PushService:
                 )
                 self.result.pages_updated += 1
 
+                # Immediately refresh local files to avoid version conflicts next time
+                LOGGER.debug("Refreshing local files after push: %s", page_path)
+                self._refresh_local_page(page_info.id, page_path)
+
             # Handle attachments
             self._push_attachments(page_path, page_info.id)
 
@@ -186,23 +214,18 @@ class PushService:
             LOGGER.warning(error_msg)
             self.result.errors.append(error_msg)
 
-    def _has_content_changed(self, page_info: PageInfo, local_content: str) -> bool:
-        """Check if local content differs from current server content.
-
-        Fetches the current content from the server and compares it with the local content
-        to avoid creating empty versions.
+    def _get_server_content(self, page_info: PageInfo) -> str:
+        """Fetch current content from server.
 
         Parameters
         ----------
         page_info
             Page metadata from stored JSON.
-        local_content
-            Current content from page.xml file.
 
         Returns
         -------
-        bool
-            True if content has changed, False otherwise.
+        str
+            Server content or stored content as fallback, formatted for comparison.
         """
         try:
             # Fetch current content from server with storage format
@@ -211,34 +234,103 @@ class PushService:
             )
             assert isinstance(server_response, dict)
             server_content = server_response.get("body", {}).get("storage", {}).get("value", "")
-
-            # Compare normalized content (strip whitespace)
-            local_normalized = local_content.strip()
-            server_normalized = server_content.strip()
-
-            if local_normalized == server_normalized:
-                LOGGER.debug(
-                    "Content identical to server for page %d (%s)",
-                    page_info.id,
-                    page_info.title,
-                )
-                return False
-
-            LOGGER.debug(
-                "Content differs from server for page %d (%s)",
-                page_info.id,
-                page_info.title,
-            )
-            return True
+            # Format server XML to match local formatted XML for accurate comparison
+            return format_xml(server_content)
         except Exception as e:  # pragma: no cover
-            # If we can't fetch from server, fall back to comparing with stored content
+            # If we can't fetch from server, fall back to stored content
             LOGGER.warning(
-                "Could not fetch server content for page %d: %s. Falling back to local comparison.",
+                "Could not fetch server content for page %d: %s. Using stored content.",
                 page_info.id,
                 e,
             )
-            stored_content = page_info.body_storage
-            return local_content.strip() != stored_content.strip()
+            return page_info.body_storage
+
+    def _has_content_changed_with_server(self, local_content: str, server_content: str) -> bool:
+        """Check if local content differs from server content.
+
+        Parameters
+        ----------
+        local_content
+            Current content from page.xml file.
+        server_content
+            Current content from server.
+
+        Returns
+        -------
+        bool
+            True if content has changed, False otherwise.
+        """
+        # Compare normalized content (strip whitespace)
+        local_normalized = local_content.strip()
+        server_normalized = server_content.strip()
+        return local_normalized != server_normalized
+
+    def _show_diff(self, title: str, server_content: str, local_content: str) -> None:
+        """Show unified diff between server and local content.
+
+        Parameters
+        ----------
+        title
+            Page title for display.
+        server_content
+            Current content from server.
+        local_content
+            New content from local file.
+        """
+        # Split into lines for difflib
+        server_lines = server_content.splitlines(keepends=True)
+        local_lines = local_content.splitlines(keepends=True)
+
+        # Generate unified diff
+        diff = difflib.unified_diff(
+            server_lines,
+            local_lines,
+            fromfile=f"server/{title}",
+            tofile=f"local/{title}",
+            lineterm="",
+        )
+
+        # Print diff with some formatting
+        diff_lines = list(diff)
+        if diff_lines:
+            LOGGER.info("")
+            LOGGER.info("=" * 70)
+            LOGGER.info("Diff for: %s", title)
+            LOGGER.info("=" * 70)
+            LOGGER.info("")
+            for line in diff_lines:
+                # Color the diff output
+                if line.startswith("+++") or line.startswith("---"):
+                    print(f"\033[1m{line}\033[0m", end="")  # Bold
+                elif line.startswith("+"):
+                    print(f"\033[32m{line}\033[0m", end="")  # Green
+                elif line.startswith("-"):
+                    print(f"\033[31m{line}\033[0m", end="")  # Red
+                elif line.startswith("@@"):
+                    print(f"\033[36m{line}\033[0m", end="")  # Cyan
+                else:  # pragma: no cover
+                    print(line, end="")
+            print()
+
+    def _refresh_local_page(self, page_id: int, page_path: Path) -> None:
+        """Refresh local page files after successful push.
+
+        Parameters
+        ----------
+        page_id
+            The page ID that was just updated.
+        page_path
+            Path to the local page directory.
+        """
+        try:
+            # Create a temporary PullService to refresh this page
+            # Use the page's parent directory as output since pull creates the page dir
+            pull_service = PullService(self.client, page_path.parent, dry_run=False)
+            pull_service._pull_page(page_id)
+            LOGGER.debug("Successfully refreshed local files for page %d", page_id)
+        except Exception as e:  # pragma: no cover
+            LOGGER.warning("Failed to refresh local files after push: %s", e)
+            LOGGER.warning("You may need to manually pull this page to avoid version conflicts")
 
     def _check_version_conflict(self, page_info: PageInfo) -> str | None:
         """Check if server version is newer than local metadata.
