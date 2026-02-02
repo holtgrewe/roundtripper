@@ -10,6 +10,7 @@ from rich.logging import RichHandler
 
 from roundtripper import __version__
 from roundtripper.confluence import app as app_confluence
+from roundtripper.file_utils import is_xmllint_available
 
 #: Logger instance.
 LOGGER = logging.getLogger(__name__)
@@ -45,6 +46,16 @@ def main(
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, handlers=[rich_handler], format=FORMAT, datefmt="[%X]")
 
+    # Check for xmllint availability
+    if not is_xmllint_available():
+        rich_console.print(
+            "[yellow]Warning: xmllint is not available. XML output will not be formatted.[/yellow]"
+        )
+        rich_console.print("[yellow]Install xmllint for pretty-printed XML output:[/yellow]")
+        rich_console.print("[yellow]  - Ubuntu/Debian: sudo apt-get install libxml2-utils[/yellow]")
+        rich_console.print("[yellow]  - macOS: brew install libxml2[/yellow]")
+        rich_console.print("[yellow]  - Fedora/RHEL: sudo dnf install libxml2[/yellow]")
+
     # Parse CLI and get ignored (non-parsed) parameters
     command: Callable[..., Any]
     bound: BoundArguments
@@ -68,7 +79,7 @@ app.command(app_confluence)
 
 def cli() -> None:
     """CLI entry point for the roundtripper command."""
-    app()
+    app.meta()
 
 
 if __name__ == "__main__":
