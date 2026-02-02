@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/holtgrewe/roundtripper/compare/roundtripper-v0.2.0...roundtripper-v0.3.0) (2026-02-02)
+
+
+### Features
+
+* add diff with upstream ([#19](https://github.com/holtgrewe/roundtripper/issues/19)) ([#25](https://github.com/holtgrewe/roundtripper/issues/25)) ([1230e04](https://github.com/holtgrewe/roundtripper/commit/1230e04ee05552c77b8f56320b01208d83893c49))
+* improve logging ([#21](https://github.com/holtgrewe/roundtripper/issues/21)) ([#27](https://github.com/holtgrewe/roundtripper/issues/27)) ([466362c](https://github.com/holtgrewe/roundtripper/commit/466362cee32345beeed9788141f24543e0dec1b0))
+* push only with change ([#18](https://github.com/holtgrewe/roundtripper/issues/18)) ([#24](https://github.com/holtgrewe/roundtripper/issues/24)) ([82bd783](https://github.com/holtgrewe/roundtripper/commit/82bd783fd77b05ae444224b584247727387e8f54))
+* require user to set push message ([#17](https://github.com/holtgrewe/roundtripper/issues/17)) ([#22](https://github.com/holtgrewe/roundtripper/issues/22)) ([888ef9d](https://github.com/holtgrewe/roundtripper/commit/888ef9d6084f6257de4cfeff070b4e20f8a1e7d9))
+
+
+### Bug Fixes
+
+* format with xmllint ([#16](https://github.com/holtgrewe/roundtripper/issues/16)) ([#20](https://github.com/holtgrewe/roundtripper/issues/20)) ([29c5081](https://github.com/holtgrewe/roundtripper/commit/29c50816759653fdbcd39a78e4fc1b799b195b74))
+* handle partial XML ([#26](https://github.com/holtgrewe/roundtripper/issues/26)) ([#28](https://github.com/holtgrewe/roundtripper/issues/28)) ([24a7792](https://github.com/holtgrewe/roundtripper/commit/24a7792e191d31a810f59e3fe664c268e05ed8a7))
+* handle partial XML ([#26](https://github.com/holtgrewe/roundtripper/issues/26)) ([#30](https://github.com/holtgrewe/roundtripper/issues/30)) ([dc3fb3f](https://github.com/holtgrewe/roundtripper/commit/dc3fb3ff9e8a9704e9194fe1f1bfe73fe45f1b8c))
+
 ## [0.2.0](https://github.com/holtgrewe/roundtripper/compare/roundtripper-v0.1.0...roundtripper-v0.2.0) (2026-01-30)
 
 
