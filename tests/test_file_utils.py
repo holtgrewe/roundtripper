@@ -37,7 +37,11 @@ class TestFormatXml:
         xml = "<root><child>value</child></root>"
 
         # Mock subprocess.run to simulate xmllint
-        formatted_output = '<?xml version="1.0"?>\n<root>\n  <child>value</child>\n</root>\n'
+        # Note: The function now wraps input with <root> tags
+        formatted_output = (
+            '<?xml version="1.0"?>\n<root>\n  <root>\n'
+            "    <child>value</child>\n  </root>\n</root>\n"
+        )
         mock_result = MagicMock()
         mock_result.stdout = formatted_output.encode("utf-8")
 
@@ -47,17 +51,16 @@ class TestFormatXml:
         ):
             formatted = format_xml(xml)
 
-            # Verify xmllint was called correctly
+            # Verify xmllint was called with wrapped input
             mock_run.assert_called_once()
             call_args = mock_run.call_args
             assert call_args[0][0] == ["xmllint", "--format", "-"]
-            assert call_args[1]["input"] == xml.encode("utf-8")
+            assert call_args[1]["input"] == f"<root>{xml}</root>".encode("utf-8")
 
-            # Verify output
-            assert "<?xml" in formatted
-            assert "<root>" in formatted
-            assert "  <child>" in formatted
-            assert "value" in formatted
+            # Verify output: wrapper is removed, XML declaration is removed
+            assert "<?xml" not in formatted
+            assert formatted.count("<root>") == 1  # Only the original root
+            assert "<child>value</child>" in formatted
 
     def test_format_xml_without_xmllint(self) -> None:
         """Test formatting returns original content when xmllint is not available."""
@@ -73,8 +76,10 @@ class TestFormatXml:
         """Test formatting XML with attributes."""
         xml = '<root attr="value"><child>text</child></root>'
 
+        # Output includes wrapper tags that will be removed
         formatted_output = (
-            '<?xml version="1.0"?>\n<root attr="value">\n  <child>text</child>\n</root>\n'
+            '<?xml version="1.0"?>\n<root>\n  <root attr="value">\n'
+            "    <child>text</child>\n  </root>\n</root>\n"
         )
         mock_result = MagicMock()
         mock_result.stdout = formatted_output.encode("utf-8")
@@ -85,9 +90,10 @@ class TestFormatXml:
         ):
             formatted = format_xml(xml)
 
-            assert "<?xml" in formatted
+            # Verify XML declaration is removed
+            assert "<?xml" not in formatted
             assert 'attr="value"' in formatted
-            assert "<child>" in formatted
+            assert "<child>text</child>" in formatted
 
     def test_format_xml_handles_subprocess_error(self) -> None:
         """Test that subprocess errors are handled gracefully."""
@@ -126,9 +132,13 @@ class TestFormatXml:
         """Test that XML content is preserved."""
         xml = "<ac:structured-macro><ac:parameter>Test</ac:parameter></ac:structured-macro>"
 
+        # Output includes wrapper tags that will be removed
         formatted_output = (
-            '<?xml version="1.0"?>\n<ac:structured-macro>\n'
-            "  <ac:parameter>Test</ac:parameter>\n</ac:structured-macro>\n"
+            '<?xml version="1.0"?>\n<root>\n'
+            "  <ac:structured-macro>\n"
+            "    <ac:parameter>Test</ac:parameter>\n"
+            "  </ac:structured-macro>\n"
+            "</root>\n"
         )
         mock_result = MagicMock()
         mock_result.stdout = formatted_output.encode("utf-8")
@@ -142,6 +152,31 @@ class TestFormatXml:
             assert "ac:structured-macro" in formatted
             assert "ac:parameter" in formatted
             assert "Test" in formatted
+            assert "Test" in formatted
+
+    def test_format_xml_with_multiple_root_elements(self) -> None:
+        """Test formatting XML fragments with multiple root elements."""
+        # This is the scenario from the issue - multiple paragraphs without a single root
+        xml = "<p>One</p><p>Two</p>"
+
+        formatted_output = '<?xml version="1.0"?>\n<root>\n  <p>One</p>\n  <p>Two</p>\n</root>\n'
+        mock_result = MagicMock()
+        mock_result.stdout = formatted_output.encode("utf-8")
+
+        with (
+            patch("roundtripper.file_utils.is_xmllint_available", return_value=True),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            formatted = format_xml(xml)
+
+            # Should have both paragraphs properly formatted
+            assert "<p>One</p>" in formatted
+            assert "<p>Two</p>" in formatted
+            # Should not contain the temporary root wrapper
+            assert "<root>" not in formatted
+            assert "</root>" not in formatted
+            # Should not contain XML declaration
+            assert "<?xml" not in formatted
 
 
 class TestSanitizeFilename:
