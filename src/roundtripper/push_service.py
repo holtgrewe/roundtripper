@@ -63,11 +63,15 @@ class PushService:
             Summary of the push operation.
         """
         LOGGER.debug("Starting push_page: path=%s, recursive=%s", page_path, recursive)
+        LOGGER.info("Analyzing page at: %s", page_path)
         self._push_page_at_path(page_path)
 
         if recursive:
+            LOGGER.info("Discovering child pages for recursive push...")
             child_pages = self._find_child_pages(page_path)
             LOGGER.debug("Found %d child pages to push", len(child_pages))
+            if child_pages:
+                LOGGER.info("Found %d child pages, starting push...", len(child_pages))
             for child_path in tqdm(child_pages, desc="Pushing child pages", disable=self.dry_run):
                 self._push_page_at_path(child_path)
 
@@ -87,9 +91,11 @@ class PushService:
             Summary of the push operation.
         """
         LOGGER.debug("Starting push_space: path=%s", space_path)
+        LOGGER.info("Discovering all pages in space directory...")
         all_pages = self._find_all_pages(space_path)
         LOGGER.info("Found %d pages to analyze", len(all_pages))
         LOGGER.debug("Page paths: %s", [str(p) for p in all_pages])
+        LOGGER.info("Starting push operations...")
 
         for page_path in tqdm(all_pages, desc="Pushing pages", disable=self.dry_run):
             self._push_page_at_path(page_path)
@@ -127,6 +133,7 @@ class PushService:
             )
 
             # Check if content has changed
+            LOGGER.debug("Checking if content has changed for: %s", page_info.title)
             if not self._has_content_changed(page_info, local_content):
                 LOGGER.debug("Skipping %s: content unchanged", page_info.title)
                 self.result.pages_skipped += 1
@@ -242,6 +249,11 @@ class PushService:
         content
             New content to push.
         """
+        LOGGER.debug(
+            "Calling Confluence API update_page: page_id=%d, title=%s",
+            page_info.id,
+            page_info.title,
+        )
         self.client.update_page(
             page_id=page_info.id,
             title=page_info.title,
@@ -249,6 +261,7 @@ class PushService:
             type="page",
             version_comment=self.message,
         )
+        LOGGER.debug("API call successful for page %d", page_info.id)
 
     def _push_attachments(self, page_path: Path, page_id: int) -> None:
         """Push attachments for a page.
@@ -268,6 +281,9 @@ class PushService:
         attachment_files = [f for f in attachments_dir.iterdir() if f.suffix != ".json"]
         LOGGER.debug("Found %d attachment files in %s", len(attachment_files), attachments_dir)
 
+        if attachment_files:
+            LOGGER.info("Analyzing %d attachments...", len(attachment_files))
+
         for attachment_file in attachment_files:
             metadata_file = attachment_file.with_suffix(attachment_file.suffix + ".json")
 
@@ -278,6 +294,7 @@ class PushService:
                     LOGGER.debug(
                         "Uploading attachment: %s to page %d", attachment_file.name, page_id
                     )
+                    LOGGER.info("Uploading: %s", attachment_file.name)
                     self._upload_attachment(page_id, attachment_file)
                     LOGGER.info("✓ Uploaded: %s", attachment_file.name)
                     self.result.attachments_uploaded += 1

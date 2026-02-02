@@ -48,6 +48,14 @@ class ConfluenceClientFactory:
             If the connection to Confluence fails.
         """
         try:
+            LOGGER.debug("Creating Confluence API client for URL: %s", str(auth.url))
+
+            # Determine authentication method for logging
+            if auth.pat:
+                LOGGER.debug("Using Personal Access Token (PAT) authentication")
+            elif auth.api_token:
+                LOGGER.debug("Using Basic authentication (username + API token)")
+
             instance = ConfluenceApiSdk(
                 url=str(auth.url),
                 username=auth.username.get_secret_value() if auth.api_token else None,
@@ -56,8 +64,11 @@ class ConfluenceClientFactory:
                 **self.connection_config,
             )
             # Test connection
+            LOGGER.debug("Testing connection by fetching space list...")
             instance.get_all_spaces(limit=1)
+            LOGGER.debug("Connection test successful")
         except Exception as e:
+            LOGGER.error("Confluence connection failed: %s", e)
             msg = f"Confluence connection failed: {e}"
             raise ConnectionError(msg) from e
         return instance
@@ -76,8 +87,10 @@ def get_confluence_client() -> ConfluenceApiSdk:
     ConnectionError
         If the connection to Confluence fails.
     """
+    LOGGER.debug("Loading Confluence settings from configuration")
     settings = get_settings()
     auth = settings.auth.confluence
     connection_config = settings.connection_config.model_dump()
 
+    LOGGER.debug("Initializing Confluence API client")
     return ConfluenceClientFactory(connection_config).create(auth)

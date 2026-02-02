@@ -58,20 +58,24 @@ class PullService:
             Summary of the pull operation.
         """
         LOGGER.info("Fetching space info for: %s", space_key)
+        LOGGER.info("Connecting to Confluence API...")
 
         space_data = self.client.get_space(space_key, expand="homepage")
         assert isinstance(space_data, dict)  # atlassian SDK return type is too broad
         space = SpaceInfo.from_api_response(space_data)
+        LOGGER.info("Space found: %s (key=%s)", space.name, space_key)
 
         if space.homepage_id is None:
             LOGGER.warning("Space '%s' has no homepage. Nothing to pull.", space_key)
             return self.result
 
         # Get all descendant page IDs
+        LOGGER.info("Discovering all pages in space...")
         page_ids = self._get_all_descendant_ids(space.homepage_id)
         page_ids.insert(0, space.homepage_id)
 
         LOGGER.info("Found %d pages to pull", len(page_ids))
+        LOGGER.info("Starting download...")
 
         # Pull each page with progress bar
         for page_id in tqdm(page_ids, desc="Pulling pages", disable=self.dry_run):
@@ -95,9 +99,11 @@ class PullService:
             Summary of the pull operation.
         """
         if recursive:
+            LOGGER.info("Discovering descendant pages for page %d...", page_id)
             page_ids = self._get_all_descendant_ids(page_id)
             page_ids.insert(0, page_id)
             LOGGER.info("Found %d pages to pull (including descendants)", len(page_ids))
+            LOGGER.info("Starting download...")
 
             for pid in tqdm(page_ids, desc="Pulling pages", disable=self.dry_run):
                 self._pull_page(pid)
@@ -125,6 +131,7 @@ class PullService:
             "limit": 100,
         }
         results: list[dict[str, Any]] = []
+        LOGGER.debug("Searching for descendants using CQL: type=page AND ancestor=%d", page_id)
 
         try:
             response = self.client.get(url, params=params)
@@ -133,6 +140,7 @@ class PullService:
             next_path = response.get("_links", {}).get("next")
 
             while next_path:
+                LOGGER.debug("Fetching next page of descendants (found %d so far)", len(results))
                 response = self.client.get(next_path)
                 assert isinstance(response, dict)  # atlassian SDK return type is too broad
                 results.extend(response.get("results", []))
@@ -153,6 +161,7 @@ class PullService:
             The page ID to pull.
         """
         try:
+            LOGGER.debug("Fetching page metadata from API: page_id=%d", page_id)
             page_data = self.client.get_page_by_id(
                 page_id,
                 expand="body.storage,body.view,body.export_view,body.editor2,"
@@ -160,6 +169,7 @@ class PullService:
             )
             assert isinstance(page_data, dict)  # atlassian SDK return type is too broad
             page = PageInfo.from_api_response(page_data)
+            LOGGER.debug("Fetched page: %s (v%d)", page.title, page.version.number)
         except Exception as e:
             error_msg = f"Failed to fetch page {page_id}: {e}"
             LOGGER.warning(error_msg)
@@ -189,7 +199,9 @@ class PullService:
             self.result.pages_skipped += 1
         else:
             # Save page content (Confluence storage format)
+            LOGGER.debug("Saving page content to: %s", page_dir)
             self._save_page_content(page_dir, page)
+            LOGGER.info("Downloaded: %s", page.title)
             self.result.pages_downloaded += 1
 
         # Pull attachments
@@ -287,6 +299,7 @@ class PullService:
         attachments_dir = page_dir / "attachments"
         start = 0
         limit = 50
+        LOGGER.debug("Checking for attachments on page %d", page_id)
 
         while True:
             try:
@@ -304,6 +317,8 @@ class PullService:
             results = response.get("results", [])
             if not results:
                 break
+
+            LOGGER.debug("Found %d attachments (batch starting at %d)", len(results), start)
 
             for att_data in results:
                 attachment = AttachmentInfo.from_api_response(att_data)
@@ -342,9 +357,11 @@ class PullService:
         # Download attachment content
         try:
             download_url = str(self.client.url) + attachment.download_link
+            LOGGER.debug("Downloading attachment: %s", filename)
             response = self.client._session.get(download_url)
             response.raise_for_status()
             content = response.content
+            LOGGER.debug("Downloaded %d bytes for attachment: %s", len(content), filename)
         except Exception as e:
             error_msg = f"Failed to download attachment '{filename}': {e}"
             LOGGER.warning(error_msg)
@@ -356,7 +373,7 @@ class PullService:
         save_json(json_path, attachment.raw_api_response)
 
         self.result.attachments_downloaded += 1
-        LOGGER.debug("Downloaded attachment: %s", filename)
+        LOGGER.info("Downloaded attachment: %s", filename)
 
     def _is_attachment_up_to_date(self, json_path: Path, current_version: int) -> bool:
         """Check if an attachment is up to date based on version number.
