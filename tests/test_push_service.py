@@ -321,19 +321,22 @@ class TestPushSpace:
         page2_confluence = page2_dir / "page.xml"
         page2_confluence.write_text("<p>Page 2 Modified</p>", encoding="utf-8")
 
-        # Mock content checks and version checks
-        # Pages are processed in order: Page 2, then Page 1
-        mock_client.get_page_by_id.side_effect = [
-            {
-                "version": {"number": 1},
-                "body": {"storage": {"value": "<p>Page 2 Original</p>"}},
-            },  # Page 2 changed
-            {"version": {"number": 1}},  # Page 2 version check
-            {
-                "version": {"number": 1},
-                "body": {"storage": {"value": "<p>Page 1</p>"}},
-            },  # Page 1 unchanged
-        ]
+        # Mock content checks and version checks using a function to handle
+        # any order of page processing (filesystem order is not guaranteed)
+        def get_page_by_id_side_effect(page_id: int, **kwargs: Any) -> dict[str, Any]:
+            if page_id == 1:
+                return {
+                    "version": {"number": 1},
+                    "body": {"storage": {"value": "<p>Page 1</p>"}},
+                }
+            elif page_id == 2:
+                return {
+                    "version": {"number": 1},
+                    "body": {"storage": {"value": "<p>Page 2 Original</p>"}},
+                }
+            return {"version": {"number": 1}}
+
+        mock_client.get_page_by_id.side_effect = get_page_by_id_side_effect
 
         result = push_service.push_space(space_dir)
 
