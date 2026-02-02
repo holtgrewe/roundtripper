@@ -8,6 +8,7 @@ import cyclopts
 from roundtripper.api_client import get_confluence_client
 from roundtripper.config_interactive import main_config_menu_loop
 from roundtripper.config_store import get_settings
+from roundtripper.diff_service import DiffService
 from roundtripper.pull_service import PullService
 from roundtripper.push_service import PushService
 
@@ -308,3 +309,86 @@ def push(
         LOGGER.info("Run without --dry-run to apply changes.")
     else:
         LOGGER.info("✓ Push completed successfully!")
+
+
+@app.command
+def diff(
+    *,
+    local_path: Path,
+    space: str | None = None,
+    page_id: int | None = None,
+    recursive: bool = True,
+    verbose: bool = False,
+) -> None:
+    """Compare local content with remote Confluence content.
+
+    Downloads the latest version from Confluence to a temporary location and
+    displays the differences using a colored diff viewer (like git).
+
+    Parameters
+    ----------
+    local_path
+        Path to the local page or space directory to compare.
+    space
+        Space key to compare with (for space-level comparison).
+    page_id
+        Specific page ID to compare with.
+    recursive
+        When comparing a specific page, also compare all descendants.
+    verbose
+        Enable debug logging.
+    """
+    if verbose:
+        logging.getLogger("roundtripper").setLevel(logging.DEBUG)
+
+    if not space and not page_id:
+        LOGGER.error("Either --space or --page-id must be specified")
+        raise SystemExit(1)
+
+    if space and page_id:
+        LOGGER.error("Cannot specify both --space and --page-id")
+        raise SystemExit(1)
+
+    # Validate local path exists
+    if not local_path.exists():
+        LOGGER.error("Local path does not exist: %s", local_path)
+        raise SystemExit(1)
+
+    # Get Confluence client
+    try:
+        client = get_confluence_client()
+    except ConnectionError as e:
+        LOGGER.error("Failed to connect to Confluence: %s", e)
+        LOGGER.info("Run 'roundtripper confluence ping' to test your connection")
+        raise SystemExit(1) from e
+
+    # Create diff service
+    service = DiffService(client, local_path)
+
+    # Perform diff
+    if space:
+        LOGGER.info("Comparing local content with Confluence space: %s", space)
+        result = service.diff_space(space)
+    else:
+        assert page_id is not None  # for type checker
+        LOGGER.info(
+            "Comparing local content with Confluence page: %d (recursive=%s)",
+            page_id,
+            recursive,
+        )
+        result = service.diff_page(page_id, recursive=recursive)
+
+    # Summary
+    if result.errors:
+        LOGGER.error("")
+        LOGGER.error("Errors encountered during diff:")
+        for error in result.errors:
+            LOGGER.error("  - %s", error)
+        raise SystemExit(1)
+
+    if result.has_differences:
+        LOGGER.info("")
+        LOGGER.info("✓ Diff completed - differences found")
+        raise SystemExit(1)  # Exit with error code when differences exist
+    else:
+        LOGGER.info("✓ Diff completed - no differences")

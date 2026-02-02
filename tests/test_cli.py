@@ -924,3 +924,287 @@ class TestConfluencePushCommand:
 
         # Verify debug logging is enabled for roundtripper logger
         assert logging.getLogger("roundtripper").level == logging.DEBUG
+
+
+class TestDiffCommand:
+    """Test the confluence diff command."""
+
+    def test_diff_requires_space_or_page_id(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test that diff command requires --space or --page-id."""
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "diff", "--local-path", str(local_path)],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_diff_rejects_both_space_and_page_id(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test that diff command rejects both --space and --page-id."""
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                [
+                    "confluence",
+                    "diff",
+                    "--local-path",
+                    str(local_path),
+                    "--space",
+                    "SPACE",
+                    "--page-id",
+                    "12345",
+                ],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_diff_requires_existing_local_path(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test that diff command requires local path to exist."""
+        local_path = tmp_path / "nonexistent"
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                [
+                    "confluence",
+                    "diff",
+                    "--local-path",
+                    str(local_path),
+                    "--space",
+                    "SPACE",
+                ],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_diff_space_success_no_changes(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test diff command with space when there are no changes."""
+        import logging
+
+        from roundtripper.models import DiffResult
+
+        caplog.set_level(logging.INFO)
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_space.return_value = DiffResult(has_differences=False)
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        app(
+            ["confluence", "diff", "--local-path", str(local_path), "--space", "SPACE"],
+            result_action="return_value",
+        )
+
+        # Verify log message
+        assert "no differences" in caplog.text
+
+    def test_diff_space_with_changes(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test diff command with space when there are changes."""
+        import logging
+
+        from roundtripper.models import DiffResult
+
+        caplog.set_level(logging.INFO)
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_space.return_value = DiffResult(has_differences=True)
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "diff", "--local-path", str(local_path), "--space", "SPACE"],
+                result_action="return_value",
+            )
+
+        # Should exit with code 1 when differences exist
+        assert exc_info.value.code == 1
+        assert "differences found" in caplog.text
+
+    def test_diff_page_recursive(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test diff command with page and recursive flag."""
+        from roundtripper.models import DiffResult
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_page.return_value = DiffResult(has_differences=False)
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        app(
+            [
+                "confluence",
+                "diff",
+                "--local-path",
+                str(local_path),
+                "--page-id",
+                "12345",
+                "--recursive",
+            ],
+            result_action="return_value",
+        )
+
+        # Verify diff_page was called with recursive=True
+        mock_service_instance.diff_page.assert_called_once_with(12345, recursive=True)
+
+    def test_diff_page_non_recursive(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test diff command with page and --no-recursive flag."""
+        from roundtripper.models import DiffResult
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_page.return_value = DiffResult(has_differences=False)
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        app(
+            [
+                "confluence",
+                "diff",
+                "--local-path",
+                str(local_path),
+                "--page-id",
+                "12345",
+                "--no-recursive",
+            ],
+            result_action="return_value",
+        )
+
+        # Verify diff_page was called with recursive=False
+        mock_service_instance.diff_page.assert_called_once_with(12345, recursive=False)
+
+    def test_diff_with_errors(
+        self,
+        mocker: MockerFixture,
+        temp_config_file: Path,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Test diff command exits with error when errors occur."""
+        import logging
+
+        from roundtripper.models import DiffResult
+
+        caplog.set_level(logging.INFO)
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_space.return_value = DiffResult(
+            has_differences=False,
+            errors=["API Error: Permission denied"],
+        )
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "diff", "--local-path", str(local_path), "--space", "SPACE"],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
+        assert "Errors encountered" in caplog.text
+
+    def test_diff_verbose_flag(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test diff command with --verbose flag enables debug logging."""
+        import logging
+
+        from roundtripper.models import DiffResult
+
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mock_client = mocker.MagicMock()
+        mocker.patch("roundtripper.confluence.get_confluence_client", return_value=mock_client)
+
+        mock_service_instance = mocker.MagicMock()
+        mock_service_instance.diff_space.return_value = DiffResult(has_differences=False)
+        mocker.patch("roundtripper.confluence.DiffService", return_value=mock_service_instance)
+
+        app(
+            [
+                "confluence",
+                "diff",
+                "--local-path",
+                str(local_path),
+                "--space",
+                "SPACE",
+                "--verbose",
+            ],
+            result_action="return_value",
+        )
+
+        # Verify debug logging is enabled for roundtripper logger
+        assert logging.getLogger("roundtripper").level == logging.DEBUG
+
+    def test_diff_connection_error(
+        self, mocker: MockerFixture, temp_config_file: Path, tmp_path: Path
+    ) -> None:
+        """Test diff command handles connection errors."""
+        local_path = tmp_path / "local"
+        local_path.mkdir()
+
+        mocker.patch(
+            "roundtripper.confluence.get_confluence_client",
+            side_effect=ConnectionError("Connection failed"),
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            app(
+                ["confluence", "diff", "--local-path", str(local_path), "--space", "SPACE"],
+                result_action="return_value",
+            )
+
+        assert exc_info.value.code == 1
