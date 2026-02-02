@@ -252,3 +252,10 @@ class PushResult(BaseModel):
     attachments_skipped: int = 0
     conflicts: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+
+
+class DiffResult(BaseModel):
+    """Result of a diff operation."""
+
+    has_differences: bool = False
+    errors: list[str] = Field(default_factory=list)
