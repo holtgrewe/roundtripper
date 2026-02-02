@@ -206,6 +206,7 @@ def push(
     recursive: bool = False,
     dry_run: bool = False,
     force: bool = False,
+    interactive: bool = True,
     verbose: bool = False,
 ) -> None:
     """Push local content back to Confluence.
@@ -227,6 +228,8 @@ def push(
         Show what would be pushed without actually pushing.
     force
         Push even if there are version conflicts (overwrites server content).
+    interactive
+        Prompt for confirmation before updating each page (default: True).
     verbose
         Enable debug logging.
     """
@@ -257,7 +260,9 @@ def push(
         raise SystemExit(1) from e
 
     # Create push service
-    service = PushService(client, message=message, dry_run=dry_run, force=force)
+    service = PushService(
+        client, message=message, dry_run=dry_run, force=force, interactive=interactive
+    )
 
     if dry_run:
         LOGGER.info("[DRY RUN] Analyzing changes...")

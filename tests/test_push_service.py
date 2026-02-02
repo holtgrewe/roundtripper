@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from pytest_mock import MockerFixture
 
 from roundtripper.push_service import PushService, compute_content_hash
 
@@ -21,7 +22,7 @@ def mock_client() -> MagicMock:
 @pytest.fixture
 def push_service(mock_client: MagicMock) -> PushService:
     """Create a PushService instance with mock client."""
-    return PushService(client=mock_client, message="Test update")
+    return PushService(client=mock_client, message="Test update", interactive=False)
 
 
 def create_page_directory(
@@ -84,20 +85,30 @@ class TestPushServiceInit:
 
     def test_default_settings(self, mock_client: MagicMock) -> None:
         """Test default settings are applied."""
-        service = PushService(client=mock_client, message="Test message")
+        service = PushService(client=mock_client, message="Test message", interactive=False)
         assert service.dry_run is False
         assert service.force is False
         assert service.message == "Test message"
 
     def test_dry_run_flag(self, mock_client: MagicMock) -> None:
         """Test dry run flag is set."""
-        service = PushService(client=mock_client, message="Test", dry_run=True)
+        service = PushService(client=mock_client, message="Test", dry_run=True, interactive=False)
         assert service.dry_run is True
 
     def test_force_flag(self, mock_client: MagicMock) -> None:
         """Test force flag is set."""
-        service = PushService(client=mock_client, message="Test", force=True)
+        service = PushService(client=mock_client, message="Test", force=True, interactive=False)
         assert service.force is True
+
+    def test_interactive_flag_default(self, mock_client: MagicMock) -> None:
+        """Test interactive flag defaults to True."""
+        service = PushService(client=mock_client, message="Test")
+        assert service.interactive is True
+
+    def test_interactive_flag(self, mock_client: MagicMock) -> None:
+        """Test interactive flag is set."""
+        service = PushService(client=mock_client, message="Test", interactive=False)
+        assert service.interactive is False
 
 
 class TestPushPage:
@@ -138,15 +149,21 @@ class TestPushPage:
             "body": {"storage": {"value": "<p>Original</p>"}},
         }
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(page_dir)
 
         assert result.pages_updated == 1
         assert result.pages_skipped == 0
         mock_client.update_page.assert_called_once()
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
     def test_push_page_dry_run(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run doesn't actually push."""
-        service = PushService(client=mock_client, message="Test update", dry_run=True)
+        service = PushService(
+            client=mock_client, message="Test update", dry_run=True, interactive=False
+        )
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify the local content
@@ -197,7 +214,9 @@ class TestPushPage:
 
     def test_push_page_force_conflict(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test force push ignores conflicts."""
-        service = PushService(client=mock_client, message="Force update", force=True)
+        service = PushService(
+            client=mock_client, message="Force update", force=True, interactive=False
+        )
         page_dir = create_page_directory(
             tmp_path, "Test Page", content="<p>Original</p>", version=1
         )
@@ -216,11 +235,15 @@ class TestPushPage:
             {"version": {"number": 3}},
         ]
 
+        # Mock the refresh method to prevent actual pull
+        service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = service.push_page(page_dir)
 
         assert len(result.conflicts) == 0
         assert result.pages_updated == 1
         mock_client.update_page.assert_called_once()
+        service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
     def test_push_page_missing_files(self, push_service: PushService, tmp_path: Path) -> None:
         """Test handling of missing page files."""
@@ -254,12 +277,16 @@ class TestPushPage:
         ]
         mock_client.update_page.return_value = {}
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(page_dir)
 
         # Version check exception is caught and logged, update proceeds
         assert result.errors == []
         assert result.pages_updated == 1
         mock_client.update_page.assert_called_once()
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
     def test_push_page_recursive(
         self, push_service: PushService, mock_client: MagicMock, tmp_path: Path
@@ -294,11 +321,15 @@ class TestPushPage:
             {"version": {"number": 1}},  # Child version check
         ]
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(parent_dir, recursive=True)
 
         # Parent unchanged, child changed
         assert result.pages_skipped == 1
         assert result.pages_updated == 1
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
 
 class TestPushSpace:
@@ -338,10 +369,14 @@ class TestPushSpace:
 
         mock_client.get_page_by_id.side_effect = get_page_by_id_side_effect
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_space(space_dir)
 
         assert result.pages_skipped == 1  # Page 1 unchanged
         assert result.pages_updated == 1  # Page 2 modified
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
 
 class TestPushAttachments:
@@ -372,10 +407,14 @@ class TestPushAttachments:
             {"version": {"number": 1}},  # Version check
         ]
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(page_dir)
 
         assert result.attachments_uploaded == 1
         mock_client.attach_file.assert_called_once()
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
     def test_push_unchanged_attachment(
         self, push_service: PushService, mock_client: MagicMock, tmp_path: Path
@@ -408,11 +447,15 @@ class TestPushAttachments:
             {"version": {"number": 1}},  # Version check
         ]
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(page_dir)
 
         assert result.attachments_skipped == 1
         assert result.attachments_uploaded == 0
         mock_client.attach_file.assert_not_called()
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
     def test_push_modified_attachment(
         self, push_service: PushService, mock_client: MagicMock, tmp_path: Path
@@ -444,10 +487,14 @@ class TestPushAttachments:
             {"version": {"number": 1}},  # Version check
         ]
 
+        # Mock the refresh method to prevent actual pull
+        push_service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
         result = push_service.push_page(page_dir)
 
         assert result.attachments_uploaded == 1
         mock_client.attach_file.assert_called_once()
+        push_service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
 
 
 class TestErrorHandling:
@@ -533,7 +580,9 @@ class TestDryRunBehavior:
 
     def test_dry_run_with_attachments(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run with attachment changes."""
-        service = PushService(client=mock_client, message="Dry run", dry_run=True)
+        service = PushService(
+            client=mock_client, message="Dry run", dry_run=True, interactive=False
+        )
         page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
 
         # Modify content
@@ -558,7 +607,9 @@ class TestDryRunBehavior:
 
     def test_dry_run_shows_conflicts(self, mock_client: MagicMock, tmp_path: Path) -> None:
         """Test dry run still detects conflicts."""
-        service = PushService(client=mock_client, message="Conflict test", dry_run=True, force=True)
+        service = PushService(
+            client=mock_client, message="Conflict test", dry_run=True, force=True, interactive=False
+        )
         page_dir = create_page_directory(
             tmp_path, "Test Page", content="<p>Original</p>", version=1
         )
@@ -578,3 +629,140 @@ class TestDryRunBehavior:
         # With force=True, no conflicts recorded (would be pushed)
         assert len(result.conflicts) == 0
         mock_client.update_page.assert_not_called()
+
+
+class TestInteractiveMode:
+    """Tests for interactive push mode."""
+
+    def test_interactive_accept_update(
+        self, mock_client: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test interactive mode with user accepting the update."""
+        service = PushService(client=mock_client, message="Test", interactive=True)
+        page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
+
+        # Modify content
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
+
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
+
+        # Mock input to accept
+        monkeypatch.setattr("builtins.input", lambda _: "y")
+        # Mock refresh to prevent actual pull
+        service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
+        result = service.push_page(page_dir)
+
+        assert result.pages_updated == 1
+        mock_client.update_page.assert_called_once()
+        service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
+
+    def test_interactive_skip_update(
+        self, mock_client: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test interactive mode with user skipping the update."""
+        service = PushService(client=mock_client, message="Test", interactive=True)
+        page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
+
+        # Modify content
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
+
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
+
+        # Mock input to skip
+        monkeypatch.setattr("builtins.input", lambda _: "n")
+
+        result = service.push_page(page_dir)
+
+        assert result.pages_skipped == 1
+        assert result.pages_updated == 0
+        mock_client.update_page.assert_not_called()
+
+    def test_interactive_quit(
+        self, mock_client: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test interactive mode with user quitting."""
+        service = PushService(client=mock_client, message="Test", interactive=True)
+        page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
+
+        # Modify content
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
+
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
+
+        # Mock input to quit
+        monkeypatch.setattr("builtins.input", lambda _: "q")
+
+        with pytest.raises(SystemExit) as exc_info:
+            service.push_page(page_dir)
+
+        assert exc_info.value.code == 0
+        mock_client.update_page.assert_not_called()
+
+    def test_interactive_empty_accepts(
+        self, mock_client: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test interactive mode with empty input (default accept)."""
+        service = PushService(client=mock_client, message="Test", interactive=True)
+        page_dir = create_page_directory(tmp_path, "Test Page", content="<p>Original</p>")
+
+        # Modify content
+        xml_file = page_dir / "page.xml"
+        xml_file.write_text("<p>Modified</p>", encoding="utf-8")
+
+        mock_client.get_page_by_id.return_value = {
+            "version": {"number": 1},
+            "body": {"storage": {"value": "<p>Original</p>"}},
+        }
+
+        # Mock input to empty string
+        monkeypatch.setattr("builtins.input", lambda _: "")
+        # Mock refresh to prevent actual pull
+        service._refresh_local_page = MagicMock()  # type: ignore[method-assign]
+
+        result = service.push_page(page_dir)
+
+        assert result.pages_updated == 1
+        mock_client.update_page.assert_called_once()
+        service._refresh_local_page.assert_called_once()  # type: ignore[attr-defined]
+
+
+class TestRefreshLocalPage:
+    """Tests for the refresh local page functionality."""
+
+    def test_refresh_local_page_success(
+        self, mock_client: MagicMock, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """Test that _refresh_local_page successfully calls PullService._pull_page."""
+        from unittest.mock import MagicMock
+
+        service = PushService(client=mock_client, message="Test", interactive=False)
+        page_dir = tmp_path / "Test Page"
+        page_dir.mkdir()
+
+        # Mock PullService and its _pull_page method
+        mock_pull_page = MagicMock()
+        mock_pull_service_class = mocker.patch("roundtripper.push_service.PullService")
+        mock_pull_service_instance = MagicMock()
+        mock_pull_service_instance._pull_page = mock_pull_page
+        mock_pull_service_class.return_value = mock_pull_service_instance
+
+        # Call the method directly
+        service._refresh_local_page(12345, page_dir)
+
+        # Verify PullService was instantiated correctly
+        mock_pull_service_class.assert_called_once_with(mock_client, page_dir.parent, dry_run=False)
+        # Verify _pull_page was called with correct page_id
+        mock_pull_page.assert_called_once_with(12345)

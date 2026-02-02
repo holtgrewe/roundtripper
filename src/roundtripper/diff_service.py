@@ -119,10 +119,12 @@ class DiffService:
 
         # Build diff command
         # Use unified diff format with colors and context
+        # Only compare XML files (like push does), exclude JSON metadata
         diff_cmd = [
             "diff",
             "-urN",  # unified format, recursive, show new files
             "--color=always",  # colored output
+            "--exclude=*.json",  # exclude JSON metadata files
             str(local_path),
             str(remote_path),
         ]
