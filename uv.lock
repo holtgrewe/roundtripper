@@ -997,7 +997,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "atlassian-python-api", specifier = ">=3.41.0" },
+    { name = "atlassian-python-api", specifier = ">=3.41.0,<5" },
     { name = "cyclopts", specifier = ">=4.4.4" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jmespath", specifier = ">=1.0.1" },

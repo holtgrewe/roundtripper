@@ -79,6 +79,11 @@ To jump directly to a specific configuration section:
 roundtripper confluence config --jump-to auth.confluence
 ```
 
+#### Authentication
+
+- **Atlassian Cloud** (`*.atlassian.net`): set `username` to your account email and `api_token` to an API token from <https://id.atlassian.com/manage-profile/security/api-tokens>, and leave `pat` empty. Cloud does not accept an API token in the `pat` field, which is sent as a Bearer token, and rejects it with `Failed to parse Connect Session Auth Token`.
+- **Confluence Server / Data Center**: set `pat` to a personal access token, or use `username` and `api_token`.
+
 ## Acknowledgments
 
 This project includes code adapted from [confluence-markdown-exporter](https://github.com/Spenhouet/confluence-markdown-exporter) by Sebastian Penhouet.
