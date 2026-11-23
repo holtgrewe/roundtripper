@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/holtgrewe/roundtripper/compare/roundtripper-v0.3.0...roundtripper-v0.3.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* cap atlassian-python-api below 5 ([#31](https://github.com/holtgrewe/roundtripper/issues/31)) ([#32](https://github.com/holtgrewe/roundtripper/issues/32)) ([4cd432a](https://github.com/holtgrewe/roundtripper/commit/4cd432a8873d388a0e39c9857fa28eab1ee66c34))
+
 ## [0.3.0](https://github.com/holtgrewe/roundtripper/compare/roundtripper-v0.2.0...roundtripper-v0.3.0) (2026-02-02)
 
 
