@@ -9,7 +9,7 @@ description = "Roundtripping with Confluence"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "atlassian-python-api>=3.41.0",
+    "atlassian-python-api>=3.41.0,<5",
     "cyclopts>=4.4.4",
     "httpx>=0.28.1",
     "jmespath>=1.0.1",

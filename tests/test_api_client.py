@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from atlassian.rest_client import AtlassianRestAPI
 from pydantic import AnyHttpUrl, SecretStr
 
 from roundtripper.api_client import ConfluenceClientFactory, get_confluence_client
@@ -80,6 +81,25 @@ class TestConfluenceClientFactory:
 
             with pytest.raises(ConnectionError, match="Confluence connection failed"):
                 factory.create(auth)
+
+    def test_cloud_client_uses_v1_space_endpoint(self) -> None:
+        """Test that an Atlassian Cloud client looks up spaces by key via the v1 REST API.
+
+        atlassian-python-api 5.x routes ``*.atlassian.net`` URLs to a Cloud v2 client whose
+        ``get_space`` requests ``spaces/<id>`` and 404s for a space key (#31).
+        """
+        auth = ApiDetails(
+            url=AnyHttpUrl("https://example.atlassian.net/"),
+            username=SecretStr("user@example.com"),
+            api_token=SecretStr("test-token"),
+        )
+
+        with patch.object(AtlassianRestAPI, "get", return_value={"results": []}) as mock_get:
+            client = ConfluenceClientFactory({}).create(auth)
+            client.get_space("MGMBI", expand="homepage")
+
+        path = mock_get.call_args.args[0]
+        assert path == "rest/api/space/MGMBI"
 
 
 class TestGetConfluenceClient:
